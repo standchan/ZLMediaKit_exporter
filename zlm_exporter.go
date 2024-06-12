@@ -5,10 +5,13 @@ import (
 	"fmt"
 	"github.com/prometheus/client_golang/prometheus"
 	"io"
+	"log"
 	"net/http"
+	"net/url"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -41,10 +44,34 @@ func (m metrics) String() string {
 }
 
 var (
-	serverMetrics = metrics{
-		1: newServerMetric("threads_load"),
-	}
+	serverMetrics  = metrics{}
+	ZLMediaKitInfo = prometheus.NewDesc(prometheus.BuildFQName(namespace, "version", "info"), "ZLMediaKit version info.", []string{"branchName", "buildTime", "commitHash"}, nil)
 )
+
+type Exporter struct {
+	client http.Client
+
+	mutex         sync.RWMutex
+	up            prometheus.Gauge
+	totalScrapes  prometheus.Counter
+	serverMetrics map[int]metricInfo
+	log           log.Logger
+}
+
+func NewExporter(logger *log.Logger) (*Exporter, error) {
+	return &Exporter{
+		up: prometheus.NewGauge(prometheus.GaugeOpts{
+			Namespace: namespace,
+			Name:      "up",
+			Help:      "Was the last scrape of ZLMediaKit successful.",
+		}),
+		totalScrapes: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: namespace,
+			Name:      "exporter_scrapes_total",
+			Help:      "Current total ZLMediaKit scrapes.",
+		}),
+	}, nil
+}
 
 func newServerMetric(metricName string, docString string, t prometheus.ValueType, constLabels prometheus.Labels) metricInfo {
 	return metricInfo{
@@ -56,6 +83,56 @@ func newServerMetric(metricName string, docString string, t prometheus.ValueType
 		),
 		Type: t,
 	}
+}
+
+func (e *Exporter) Describe(ch chan<- *prometheus.Desc) {
+	for _, m := range e.serverMetrics {
+		ch <- m.Desc
+	}
+	ch <- e.up.Desc()
+	ch <- e.totalScrapes.Desc()
+}
+
+func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
+	e.mutex.Lock()
+	defer e.mutex.Unlock()
+
+	up := e.scrapeHandler(ch)
+	ch <- prometheus.MustNewConstMetric(ZLMediaKitInfo, prometheus.GaugeValue, up)
+}
+
+func (e *Exporter) scrapeHandler(ch chan<- prometheus.Metric) (up float64) {
+	e.totalScrapes.Inc()
+	return 1
+}
+
+type versionInfo struct {
+	BranchName string `json:"branchName"`
+	BuildTime  string `json:"buildTime"`
+	CommitHash string `json:"commitHash"`
+}
+
+func (e *Exporter) extractInfo(ch chan<- prometheus.Metric) {
+	header := http.Header{}
+	header.Add("secret", "xxxx")
+	parsedURL, err := url.Parse("http://127.0.0.1/index/api/version")
+	if err != nil {
+		// 处理错误
+		log.Fatal(err)
+	}
+
+	req := &http.Request{
+		Method: http.MethodGet,
+		URL:    parsedURL,
+		Header: header,
+	}
+
+	res, err := e.client.Do(req)
+	if err != nil {
+		e.log.Println(res)
+	}
+	defer res.Body.Close()
+
 }
 
 func fetchHTTP(uri string, sslVerify, proxyFromEnv bool, timeout time.Duration) func() (io.ReadCloser, error) {
