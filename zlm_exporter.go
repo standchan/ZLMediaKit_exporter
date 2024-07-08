@@ -2,6 +2,7 @@ package main
 
 import (
 	"crypto/tls"
+	"encoding/json"
 	"fmt"
 	"github.com/prometheus/client_golang/prometheus"
 	"io"
@@ -98,12 +99,20 @@ func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 	defer e.mutex.Unlock()
 
 	up := e.scrapeHandler(ch)
-	ch <- prometheus.MustNewConstMetric(ZLMediaKitInfo, prometheus.GaugeValue, up)
+	ch <- prometheus.MustNewConstMetric(e.up.Desc(), prometheus.GaugeValue, up)
 }
 
 func (e *Exporter) scrapeHandler(ch chan<- prometheus.Metric) (up float64) {
 	e.totalScrapes.Inc()
+
+	e.extractAPIVersion(ch)
+
 	return 1
+}
+
+type APIResponse struct {
+	Code int      `json:"code"`
+	Data []string `json:"data"`
 }
 
 type versionInfo struct {
@@ -112,7 +121,7 @@ type versionInfo struct {
 	CommitHash string `json:"commitHash"`
 }
 
-func (e *Exporter) extractInfo(ch chan<- prometheus.Metric) {
+func (e *Exporter) extractAPIVersion(ch chan<- prometheus.Metric) {
 	header := http.Header{}
 	header.Add("secret", "xxxx")
 	parsedURL, err := url.Parse("http://127.0.0.1/index/api/version")
@@ -133,6 +142,21 @@ func (e *Exporter) extractInfo(ch chan<- prometheus.Metric) {
 	}
 	defer res.Body.Close()
 
+	var apiResponse APIResponse
+	if err := json.NewDecoder(res.Body).Decode(&apiResponse); err != nil {
+		e.log.Println(err)
+		//e.up.Inc()
+		//ch <- prometheus.MustNewConstMetric(, prometheus.GaugeValue, e.up)
+		return
+	}
+	if apiResponse.Code != 0 {
+		e.log.Println(apiResponse)
+		//e.up.Inc()
+		//ch <- prometheus.MustNewConstMetric(, prometheus.GaugeValue, e.up)
+		return
+	}
+	// 不知道apiResponse.Data中的字段排序会不会变化，这里直接传递给Desc可能有问题
+	ch <- prometheus.MustNewConstMetric(ZLMediaKitInfo, prometheus.GaugeValue, 1, apiResponse.Data...)
 }
 
 func fetchHTTP(uri string, sslVerify, proxyFromEnv bool, timeout time.Duration) func() (io.ReadCloser, error) {
