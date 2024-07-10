@@ -47,6 +47,7 @@ func (m metrics) String() string {
 var (
 	serverMetrics  = metrics{}
 	ZLMediaKitInfo = prometheus.NewDesc(prometheus.BuildFQName(namespace, "version", "info"), "ZLMediaKit version info.", []string{"branchName", "buildTime", "commitHash"}, nil)
+	ApiStatus      = prometheus.NewDesc(prometheus.BuildFQName(namespace, "api", "status"), "Shows the status of each API endpoint", []string{"endpoint"}, nil)
 )
 
 type Exporter struct {
@@ -157,6 +158,45 @@ func (e *Exporter) extractAPIVersion(ch chan<- prometheus.Metric) {
 	}
 	// 不知道apiResponse.Data中的字段排序会不会变化，这里直接传递给Desc可能有问题
 	ch <- prometheus.MustNewConstMetric(ZLMediaKitInfo, prometheus.GaugeValue, 1, apiResponse.Data...)
+}
+
+func (e *Exporter) extractAPIStatus(ch chan<- prometheus.Metric) {
+	header := http.Header{}
+	header.Add("secret", "xxxx")
+	parsedURL, err := url.Parse("http://127.0.0.1/index/api/getApiList")
+	if err != nil {
+		// 处理错误
+		log.Fatal(err)
+	}
+
+	req := &http.Request{
+		Method: http.MethodGet,
+		URL:    parsedURL,
+		Header: header,
+	}
+
+	res, err := e.client.Do(req)
+	if err != nil {
+		e.log.Println(res)
+	}
+	defer res.Body.Close()
+
+	var apiResponse APIResponse
+	if err := json.NewDecoder(res.Body).Decode(&apiResponse); err != nil {
+		e.log.Println(err)
+		//e.up.Inc()
+		//ch <- prometheus.MustNewConstMetric(, prometheus.GaugeValue, e.up)
+		return
+	}
+	if apiResponse.Code != 0 {
+		e.log.Println(apiResponse)
+		//e.up.Inc()
+		//ch <- prometheus.MustNewConstMetric(, prometheus.GaugeValue, e.up)
+		return
+	}
+	for _, endpoint := range apiResponse.Data {
+		ch <- prometheus.MustNewConstMetric(ApiStatus, prometheus.GaugeValue, 1, endpoint)
+	}
 }
 
 func fetchHTTP(uri string, sslVerify, proxyFromEnv bool, timeout time.Duration) func() (io.ReadCloser, error) {
