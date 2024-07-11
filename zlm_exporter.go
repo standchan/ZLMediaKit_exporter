@@ -4,11 +4,21 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"github.com/alecthomas/kingpin/v2"
+	"github.com/go-kit/log"
+	"github.com/go-kit/log/level"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors/version"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/prometheus/common/promlog"
+	"github.com/prometheus/exporter-toolkit/web"
+	webflag "github.com/prometheus/exporter-toolkit/web/kingpinflag"
+
 	"io"
-	"log"
+	. "log"
 	"net/http"
 	"net/url"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -60,7 +70,7 @@ type Exporter struct {
 	log           log.Logger
 }
 
-func NewExporter(logger *log.Logger) (*Exporter, error) {
+func NewExporter(logger log.Logger) (*Exporter, error) {
 	return &Exporter{
 		up: prometheus.NewGauge(prometheus.GaugeOpts{
 			Namespace: namespace,
@@ -72,6 +82,7 @@ func NewExporter(logger *log.Logger) (*Exporter, error) {
 			Name:      "exporter_scrapes_total",
 			Help:      "Current total ZLMediaKit scrapes.",
 		}),
+		log: logger,
 	}, nil
 }
 
@@ -124,11 +135,11 @@ type versionInfo struct {
 
 func (e *Exporter) extractAPIVersion(ch chan<- prometheus.Metric) {
 	header := http.Header{}
-	header.Add("secret", "xxxx")
+	//header.Add("secret", "xxxx")
 	parsedURL, err := url.Parse("http://127.0.0.1/index/api/version")
 	if err != nil {
 		// 处理错误
-		log.Fatal(err)
+		Fatal(err)
 	}
 
 	req := &http.Request{
@@ -139,24 +150,25 @@ func (e *Exporter) extractAPIVersion(ch chan<- prometheus.Metric) {
 
 	res, err := e.client.Do(req)
 	if err != nil {
-		e.log.Println(res)
+		e.log.Log("msg", "Error scraping ZLMediaKit", "err", err)
 	}
 	defer res.Body.Close()
 
 	var apiResponse APIResponse
 	if err := json.NewDecoder(res.Body).Decode(&apiResponse); err != nil {
-		e.log.Println(err)
+		e.log.Log("msg", "Error decoding JSON response", "err", err)
 		//e.up.Inc()
 		//ch <- prometheus.MustNewConstMetric(, prometheus.GaugeValue, e.up)
 		return
 	}
 	if apiResponse.Code != 0 {
-		e.log.Println(apiResponse)
+		e.log.Log("msg", "API response code is not 0", "code", apiResponse.Code)
 		//e.up.Inc()
 		//ch <- prometheus.MustNewConstMetric(, prometheus.GaugeValue, e.up)
 		return
 	}
 	// 不知道apiResponse.Data中的字段排序会不会变化，这里直接传递给Desc可能有问题
+	// todo: 不知道这样行不行
 	ch <- prometheus.MustNewConstMetric(ZLMediaKitInfo, prometheus.GaugeValue, 1, apiResponse.Data...)
 }
 
@@ -222,8 +234,42 @@ func fetchHTTP(uri string, sslVerify, proxyFromEnv bool, timeout time.Duration) 
 	}
 }
 
+var (
+	webConfig = webflag.AddFlags(kingpin.CommandLine, ":9101")
+)
+
 // doc: https://prometheus.io/docs/instrumenting/writing_exporters/
 // 1.metric must use base units
 func main() {
+	promlogConfig := &promlog.Config{}
 
+	logger := promlog.New(promlogConfig)
+
+	exporter, err := NewExporter(logger)
+	if err != nil {
+		Fatalf("Error creating exporter: %s", err)
+	}
+	prometheus.MustRegister(exporter)
+	prometheus.MustRegister(version.NewCollector("zlm_exporter"))
+
+	http.Handle("/", promhttp.Handler())
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`<html>
+             <head><title>ZLMediakit Exporter</title></head>
+             <body>
+             <h1>ZLMediakit Exporter</h1>
+             <p><a href='` + "/" + `'>Metrics</a></p>
+             </body>
+             </html>`))
+	})
+	srv := &http.Server{}
+	if err := web.ListenAndServe(srv, webConfig, logger); err != nil {
+		level.Error(logger).Log("msg", "Error starting HTTP server", "err", err)
+		os.Exit(1)
+	}
 }
+
+// 当前方向
+// 先把exporter运行起来，整体跑起来
+// 后续再慢慢补充指标和优化代码
+// 最后再补充测试代码和其他配置以及文档内容
