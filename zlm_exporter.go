@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
@@ -13,10 +14,13 @@ import (
 	. "log"
 	"net/http"
 	"net/url"
+	"os"
+	"os/signal"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -54,6 +58,12 @@ var (
 	ApiStatus      = prometheus.NewDesc(prometheus.BuildFQName(namespace, "api", "status"), "Shows the status of each API endpoint", []string{"endpoint"}, nil)
 )
 
+type BuildInfo struct {
+	Version   string
+	CommitSha string
+	Date      string
+}
+
 type Exporter struct {
 	client http.Client
 
@@ -64,10 +74,12 @@ type Exporter struct {
 	log           *logrus.Logger
 
 	mux *http.ServeMux
+
+	buildInfo BuildInfo
 }
 
 func NewExporter(logger *logrus.Logger) (*Exporter, error) {
-	return &Exporter{
+	e := &Exporter{
 		up: prometheus.NewGauge(prometheus.GaugeOpts{
 			Namespace: namespace,
 			Name:      "up",
@@ -79,7 +91,11 @@ func NewExporter(logger *logrus.Logger) (*Exporter, error) {
 			Help:      "Current total ZLMediaKit scrapes.",
 		}),
 		log: logger,
-	}, nil
+	}
+
+	e.mux.HandleFunc("/", e.indexHandler)
+	e.mux.HandleFunc("/scrape", e.scrapeHandler)
+	e.mux.HandleFunc("/health", e.healthHandler)
 }
 
 func newServerMetric(metricName string, docString string, t prometheus.ValueType, constLabels prometheus.Labels) metricInfo {
@@ -106,16 +122,13 @@ func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 	e.mutex.Lock()
 	defer e.mutex.Unlock()
 
-	up := e.scrapeHandler(ch)
-	ch <- prometheus.MustNewConstMetric(e.up.Desc(), prometheus.GaugeValue, up)
+	ch <- prometheus.MustNewConstMetric(e.up.Desc(), prometheus.GaugeValue, 1)
 }
 
-func (e *Exporter) scrapeHandler(ch chan<- prometheus.Metric) (up float64) {
+func (e *Exporter) scrapeHandler(ch chan<- prometheus.Metric) {
 	e.totalScrapes.Inc()
 
 	e.extractAPIVersion(ch)
-
-	return 1
 }
 
 func (e *Exporter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -170,6 +183,21 @@ func (e *Exporter) extractAPIVersion(ch chan<- prometheus.Metric) {
 	// 不知道apiResponse.Data中的字段排序会不会变化，这里直接传递给Desc可能有问题
 	// todo: 不知道这样行不行
 	ch <- prometheus.MustNewConstMetric(ZLMediaKitInfo, prometheus.GaugeValue, 1, apiResponse.Data...)
+}
+
+func (e *Exporter) healthHandler(w http.ResponseWriter, r *http.Request) {
+	_, _ = w.Write([]byte(`ok`))
+}
+
+func (e *Exporter) indexHandler(w http.ResponseWriter, r *http.Request) {
+	_, _ = w.Write([]byte(`<html>
+<head><title>Redis Exporter ` + e.buildInfo.Version + `</title></head>
+<body>
+<h1>Redis Exporter ` + e.buildInfo.Version + `</h1>
+<p><a href='` + `'>Metrics</a></p>
+</body>
+</html>
+`))
 }
 
 func (e *Exporter) extractAPIStatus(ch chan<- prometheus.Metric) {
@@ -263,6 +291,20 @@ func main() {
 		log.Fatal(err)
 	}
 
+	// graceful shutdown
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	_quit := <-quit
+	log.Infof("Received %s signal, exiting", _quit.String())
+	// Create a context with a timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// Shutdown the HTTP server gracefully
+	if err := server.Shutdown(ctx); err != nil {
+		log.Fatalf("Server shutdown failed: %v", err)
+	}
+	log.Infof("Server shut down gracefully")
 }
 
 // 当前方向
