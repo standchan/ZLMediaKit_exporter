@@ -7,16 +7,12 @@ import (
 	"github.com/alecthomas/kingpin/v2"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors/version"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/prometheus/common/promlog"
-	"github.com/prometheus/exporter-toolkit/web"
 	webflag "github.com/prometheus/exporter-toolkit/web/kingpinflag"
 	"github.com/sirupsen/logrus"
 	"io"
 	. "log"
 	"net/http"
 	"net/url"
-	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -66,6 +62,8 @@ type Exporter struct {
 	totalScrapes  prometheus.Counter
 	serverMetrics map[int]metricInfo
 	log           *logrus.Logger
+
+	mux *http.ServeMux
 }
 
 func NewExporter(logger *logrus.Logger) (*Exporter, error) {
@@ -118,6 +116,10 @@ func (e *Exporter) scrapeHandler(ch chan<- prometheus.Metric) (up float64) {
 	e.extractAPIVersion(ch)
 
 	return 1
+}
+
+func (e *Exporter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	e.mux.ServeHTTP(w, r)
 }
 
 type APIResponse struct {
@@ -246,10 +248,6 @@ func main() {
 	})
 	log.SetLevel(logrus.InfoLevel)
 
-	promlogConfig := &promlog.Config{}
-
-	logger := promlog.New(promlogConfig)
-
 	exporter, err := NewExporter(log)
 	if err != nil {
 		Fatalf("Error creating exporter: %s", err)
@@ -257,21 +255,14 @@ func main() {
 	prometheus.MustRegister(exporter)
 	prometheus.MustRegister(version.NewCollector("zlm_exporter"))
 
-	http.Handle("/", promhttp.Handler())
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`<html>
-             <head><title>ZLMediakit Exporter</title></head>
-             <body>
-             <h1>ZLMediakit Exporter</h1>
-             <p><a href='` + "/" + `'>Metrics</a></p>
-             </body>
-             </html>`))
-	})
-	srv := &http.Server{}
-	if err := web.ListenAndServe(srv, webConfig, logger); err != nil {
-		log.Error("msg", "Error starting HTTP server", "err", err)
-		os.Exit(1)
+	server := &http.Server{
+		Handler: exporter,
 	}
+	err = server.ListenAndServe()
+	if err != nil {
+		log.Fatal(err)
+	}
+
 }
 
 // 当前方向
