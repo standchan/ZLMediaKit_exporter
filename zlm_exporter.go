@@ -5,15 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/alecthomas/kingpin/v2"
-	"github.com/go-kit/log"
-	"github.com/go-kit/log/level"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors/version"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/prometheus/common/promlog"
 	"github.com/prometheus/exporter-toolkit/web"
 	webflag "github.com/prometheus/exporter-toolkit/web/kingpinflag"
-
+	"github.com/sirupsen/logrus"
 	"io"
 	. "log"
 	"net/http"
@@ -67,10 +65,10 @@ type Exporter struct {
 	up            prometheus.Gauge
 	totalScrapes  prometheus.Counter
 	serverMetrics map[int]metricInfo
-	log           log.Logger
+	log           *logrus.Logger
 }
 
-func NewExporter(logger log.Logger) (*Exporter, error) {
+func NewExporter(logger *logrus.Logger) (*Exporter, error) {
 	return &Exporter{
 		up: prometheus.NewGauge(prometheus.GaugeOpts{
 			Namespace: namespace,
@@ -150,19 +148,19 @@ func (e *Exporter) extractAPIVersion(ch chan<- prometheus.Metric) {
 
 	res, err := e.client.Do(req)
 	if err != nil {
-		e.log.Log("msg", "Error scraping ZLMediaKit", "err", err)
+		e.log.Error("msg", "Error scraping ZLMediaKit", "err", err)
 	}
 	defer res.Body.Close()
 
 	var apiResponse APIResponse
 	if err := json.NewDecoder(res.Body).Decode(&apiResponse); err != nil {
-		e.log.Log("msg", "Error decoding JSON response", "err", err)
+		e.log.Error("msg", "Error decoding JSON response", "err", err)
 		//e.up.Inc()
 		//ch <- prometheus.MustNewConstMetric(, prometheus.GaugeValue, e.up)
 		return
 	}
 	if apiResponse.Code != 0 {
-		e.log.Log("msg", "API response code is not 0", "code", apiResponse.Code)
+		e.log.Error("msg", "API response code is not 0", "code", apiResponse.Code)
 		//e.up.Inc()
 		//ch <- prometheus.MustNewConstMetric(, prometheus.GaugeValue, e.up)
 		return
@@ -178,7 +176,7 @@ func (e *Exporter) extractAPIStatus(ch chan<- prometheus.Metric) {
 	parsedURL, err := url.Parse("http://127.0.0.1/index/api/getApiList")
 	if err != nil {
 		// 处理错误
-		log.Fatal(err)
+		e.log.Error(err)
 	}
 
 	req := &http.Request{
@@ -189,19 +187,19 @@ func (e *Exporter) extractAPIStatus(ch chan<- prometheus.Metric) {
 
 	res, err := e.client.Do(req)
 	if err != nil {
-		e.log.Println(res)
+		e.log.Error("msg", "Error scraping ZLMediaKit", "err", err)
 	}
 	defer res.Body.Close()
 
 	var apiResponse APIResponse
 	if err := json.NewDecoder(res.Body).Decode(&apiResponse); err != nil {
-		e.log.Println(err)
+		e.log.Error(err)
 		//e.up.Inc()
 		//ch <- prometheus.MustNewConstMetric(, prometheus.GaugeValue, e.up)
 		return
 	}
 	if apiResponse.Code != 0 {
-		e.log.Println(apiResponse)
+		e.log.Error("msg", "API response code is not 0", "code", apiResponse.Code)
 		//e.up.Inc()
 		//ch <- prometheus.MustNewConstMetric(, prometheus.GaugeValue, e.up)
 		return
@@ -241,11 +239,18 @@ var (
 // doc: https://prometheus.io/docs/instrumenting/writing_exporters/
 // 1.metric must use base units
 func main() {
+	log := logrus.New()
+
+	log.SetFormatter(&logrus.TextFormatter{
+		FullTimestamp: true,
+	})
+	log.SetLevel(logrus.InfoLevel)
+
 	promlogConfig := &promlog.Config{}
 
 	logger := promlog.New(promlogConfig)
 
-	exporter, err := NewExporter(logger)
+	exporter, err := NewExporter(log)
 	if err != nil {
 		Fatalf("Error creating exporter: %s", err)
 	}
@@ -264,7 +269,7 @@ func main() {
 	})
 	srv := &http.Server{}
 	if err := web.ListenAndServe(srv, webConfig, logger); err != nil {
-		level.Error(logger).Log("msg", "Error starting HTTP server", "err", err)
+		log.Error("msg", "Error starting HTTP server", "err", err)
 		os.Exit(1)
 	}
 }
