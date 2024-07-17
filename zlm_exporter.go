@@ -74,11 +74,16 @@ type Exporter struct {
 	log           *logrus.Logger
 
 	mux *http.ServeMux
-
-	buildInfo BuildInfo
 }
 
-func NewExporter(logger *logrus.Logger) (*Exporter, error) {
+type Options struct {
+	Namespace string
+
+	Registry  *prometheus.Registry
+	BuildInfo BuildInfo
+}
+
+func NewExporter(logger *logrus.Logger, opts Options) (*Exporter, error) {
 	e := &Exporter{
 		up: prometheus.NewGauge(prometheus.GaugeOpts{
 			Namespace: namespace,
@@ -276,7 +281,8 @@ func main() {
 	})
 	log.SetLevel(logrus.InfoLevel)
 
-	exporter, err := NewExporter(log)
+	opt := Options{}
+	exporter, err := NewExporter(log, opt)
 	if err != nil {
 		Fatalf("Error creating exporter: %s", err)
 	}
