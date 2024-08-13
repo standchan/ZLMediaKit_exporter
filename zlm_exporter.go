@@ -15,7 +15,6 @@ import (
 	"github.com/prometheus/exporter-toolkit/web"
 	webflag "github.com/prometheus/exporter-toolkit/web/kingpinflag"
 	"io"
-	. "log"
 	"net/http"
 	"net/url"
 	"os"
@@ -28,6 +27,7 @@ import (
 
 const (
 	namespace = "zlmediakit"
+	subsystem = "server"
 )
 
 var (
@@ -55,10 +55,16 @@ func (m metrics) String() string {
 }
 
 var (
-	serverMetrics    = metrics{}
-	ZLMediaKitInfo   = prometheus.NewDesc(prometheus.BuildFQName(namespace, "version", "info"), "ZLMediaKit version info.", []string{"branchName", "buildTime", "commitHash"}, nil)
-	ApiStatus        = prometheus.NewDesc(prometheus.BuildFQName(namespace, "api", "status"), "Shows the status of each API endpoint", []string{"endpoint"}, nil)
-	ThreadsLoadTotal = prometheus.NewDesc(prometheus.BuildFQName(namespace, "threads", "load_total"), "Shows the total of network thread", []string{}, nil)
+	serverMetrics  = metrics{}
+	ZLMediaKitInfo = prometheus.NewDesc(prometheus.BuildFQName(namespace, subsystem, "version_info"), "ZLMediaKit version info.", []string{"branchName", "buildTime", "commitHash"}, nil)
+	ApiStatus      = prometheus.NewDesc(prometheus.BuildFQName(namespace, subsystem, "api_status"), "Shows the status of each API endpoint", []string{"endpoint"}, nil)
+
+	// 网络线程相关指标
+	// todo Threads指标可能用constLabels更好？
+	Threads           = prometheus.NewDesc(prometheus.BuildFQName(namespace, subsystem, "threads"), "Network threads", []string{"load", "delay"}, nil)
+	ThreadsTotal      = prometheus.NewDesc(prometheus.BuildFQName(namespace, subsystem, "threads_total"), "Total number of network threads", []string{}, nil)
+	ThreadsLoadTotal  = prometheus.NewDesc(prometheus.BuildFQName(namespace, subsystem, "threads_load_total"), "Total number of network threads load", []string{}, nil)
+	ThreadsDelayTotal = prometheus.NewDesc(prometheus.BuildFQName(namespace, subsystem, "threads_delay_total"), "Total number of network threads delay", []string{}, nil)
 )
 
 type Exporter struct {
@@ -80,6 +86,12 @@ type Options struct {
 
 	Registry  *prometheus.Registry
 	BuildInfo BuildInfo
+}
+
+type BuildInfo struct {
+	Version   string
+	CommitSha string
+	Date      string
 }
 
 func NewExporter(logger log.Logger, opts Options) (*Exporter, error) {
@@ -132,114 +144,109 @@ func (e *Exporter) scrape(ch chan<- prometheus.Metric) (up float64) {
 	e.totalScrapes.Inc()
 	e.extractZLMVersion(ch)
 	e.extractAPIStatus(ch)
+	e.extractThreadsLoad(ch)
 	return 1
-}
-
-func (e *Exporter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	e.mux.ServeHTTP(w, r)
 }
 
 type ZLMVersion struct {
 	Code int               `json:"code"`
-	Data map[string]string `json:"data"`
+	Data map[string]string `json:"Data"`
 }
 
 type APIStatus struct {
 	Code int      `json:"code"`
-	Data []string `json:"data"`
+	Data []string `json:"Data"`
 }
 
-type versionInfo struct {
-	BranchName string `json:"branchName"`
-	BuildTime  string `json:"buildTime"`
-	CommitHash string `json:"commitHash"`
+func (e *Exporter) extractMetrics(ch chan<- prometheus.Metric, endpoint string, fetchHTTP func(closer io.ReadCloser) error) {
+	header := http.Header{}
+	header.Add("secret", ZLMSecret)
+	parsedURL, err := url.Parse(endpoint)
+	if err != nil {
+		level.Error(e.logger).Log("msg", "Error parsing URL", "err", err)
+		return
+	}
+
+	req := &http.Request{
+		Method: http.MethodGet,
+		URL:    parsedURL,
+		Header: header,
+	}
+
+	res, err := e.client.Do(req)
+	if err != nil {
+		level.Error(e.logger).Log("msg", "Error scraping ZLMediaKit", "err", err)
+		return
+	}
+	defer res.Body.Close()
+
+	if err := fetchHTTP(res.Body); err != nil {
+		level.Error(e.logger).Log("msg", "Error processing response", "err", err)
+	}
 }
 
 func (e *Exporter) extractZLMVersion(ch chan<- prometheus.Metric) {
-	header := http.Header{}
-	header.Add("secret", ZLMSecret)
-	parsedURL, err := url.Parse("http://127.0.0.1/index/api/version")
-	if err != nil {
-		// 处理错误
-		Fatal(err)
+	fetchFunc := func(body io.ReadCloser) error {
+		var apiResponse ZLMVersion
+		if err := json.NewDecoder(body).Decode(&apiResponse); err != nil {
+			return fmt.Errorf("error decoding JSON response: %w", err)
+		}
+		if apiResponse.Code != 0 {
+			return fmt.Errorf("API response code is not 0: %d", apiResponse.Code)
+		}
+		ch <- prometheus.MustNewConstMetric(ZLMediaKitInfo, prometheus.GaugeValue, 1, apiResponse.Data["branchName"], apiResponse.Data["buildTime"], apiResponse.Data["commitHash"])
+		return nil
 	}
-
-	req := &http.Request{
-		Method: http.MethodGet,
-		URL:    parsedURL,
-		Header: header,
-	}
-
-	res, err := e.client.Do(req)
-	if err != nil {
-		level.Error(e.logger).Log("msg", "Error scraping ZLMediaKit", "err", err)
-	}
-
-	defer res.Body.Close()
-	var apiResponse ZLMVersion
-	if err := json.NewDecoder(res.Body).Decode(&apiResponse); err != nil {
-		level.Error(e.logger).Log("msg", "Error decoding JSON response", "err", err)
-		return
-	}
-	if apiResponse.Code != 0 {
-		level.Error(e.logger).Log("msg", "API response code is not 0", "code", apiResponse.Code)
-		return
-	}
-	// 不知道apiResponse.Data中的字段排序会不会变化，这里直接传递给Desc可能有问题
-	ch <- prometheus.MustNewConstMetric(ZLMediaKitInfo, prometheus.GaugeValue, 1, apiResponse.Data["branchName"], apiResponse.Data["buildTime"], apiResponse.Data["commitHash"])
-}
-
-type BuildInfo struct {
-	Version   string
-	CommitSha string
-	Date      string
+	e.extractMetrics(ch, "http://127.0.0.1/index/api/version", fetchFunc)
 }
 
 func (e *Exporter) extractAPIStatus(ch chan<- prometheus.Metric) {
-	header := http.Header{}
-	header.Add("secret", ZLMSecret)
-	parsedURL, err := url.Parse("http://127.0.0.1/index/api/getApiList")
-	if err != nil {
-		level.Error(e.logger).Log("msg", "Error parsing URL", "err", err)
+	processFunc := func(body io.ReadCloser) error {
+		var apiResponse APIStatus
+		if err := json.NewDecoder(body).Decode(&apiResponse); err != nil {
+			return fmt.Errorf("error decoding JSON response: %w", err)
+		}
+		if apiResponse.Code != 0 {
+			return fmt.Errorf("API response code is not 0: %d", apiResponse.Code)
+		}
+		for _, endpoint := range apiResponse.Data {
+			ch <- prometheus.MustNewConstMetric(ApiStatus, prometheus.GaugeValue, 1, endpoint)
+		}
+		return nil
 	}
-
-	req := &http.Request{
-		Method: http.MethodGet,
-		URL:    parsedURL,
-		Header: header,
-	}
-
-	res, err := e.client.Do(req)
-	if err != nil {
-		level.Error(e.logger).Log("msg", "Error scraping ZLMediaKit", "err", err)
-	}
-	defer res.Body.Close()
-
-	var apiResponse APIStatus
-	if err := json.NewDecoder(res.Body).Decode(&apiResponse); err != nil {
-		level.Error(e.logger).Log("msg", "Error decoding JSON response", "err", err)
-		//e.up.Inc()
-		//ch <- prometheus.MustNewConstMetric(, prometheus.GaugeValue, e.up)
-		return
-	}
-	if apiResponse.Code != 0 {
-		level.Error(e.logger).Log("msg", "API response code is not 0", "code", apiResponse.Code)
-		return
-	}
-	for _, endpoint := range apiResponse.Data {
-		ch <- prometheus.MustNewConstMetric(ApiStatus, prometheus.GaugeValue, 1, endpoint)
-	}
+	e.extractMetrics(ch, "http://127.0.0.1/index/api/getApiList", processFunc)
 }
-
 func (e *Exporter) extractThreadsLoad(ch chan<- prometheus.Metric) {
-	header := http.Header{}
-	header.Add("secret", ZLMSecret)
-	parsedURL, err := url.Parse("http://127.0.0.1/index/api/getThreadsLoad")
-	if err != nil {
-		level.Error(e.logger).Log("msg", "Error parsing URL", "err", err)
+	processFunc := func(body io.ReadCloser) error {
+		type ThreadsLoad struct {
+			Code int `json:"code"`
+			Data []struct {
+				Load  float64 `json:"load"`
+				Delay float64 `json:"delay"`
+			}
+		}
+		var threadsLoad ThreadsLoad
+		if err := json.NewDecoder(body).Decode(&threadsLoad); err != nil {
+			return fmt.Errorf("error decoding JSON response: %w", err)
+		}
+		if threadsLoad.Code != 0 {
+			return fmt.Errorf("API response code is not 0: %d", threadsLoad.Code)
+		}
+		loadTotal := float64(0)
+		delayTotal := float64(0)
+		total := float64(0)
+		for _, data := range threadsLoad.Data {
+			loadTotal += data.Load
+			delayTotal += data.Delay
+			total++
+		}
+		ch <- prometheus.MustNewConstMetric(ThreadsTotal, prometheus.GaugeValue, total)
+		ch <- prometheus.MustNewConstMetric(ThreadsLoadTotal, prometheus.GaugeValue, loadTotal)
+		ch <- prometheus.MustNewConstMetric(ThreadsDelayTotal, prometheus.GaugeValue, delayTotal)
+		return nil
 	}
+	e.extractMetrics(ch, "http://127.0.0.1/index/api/getThreadsLoad", processFunc)
 }
-
 func fetchHTTP(uri string, sslVerify, proxyFromEnv bool, timeout time.Duration) func() (io.ReadCloser, error) {
 	tr := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: !sslVerify}}
 	if proxyFromEnv {
