@@ -55,9 +55,10 @@ func (m metrics) String() string {
 }
 
 var (
-	serverMetrics  = metrics{}
-	ZLMediaKitInfo = prometheus.NewDesc(prometheus.BuildFQName(namespace, "version", "info"), "ZLMediaKit version info.", []string{"branchName", "buildTime", "commitHash"}, nil)
-	ApiStatus      = prometheus.NewDesc(prometheus.BuildFQName(namespace, "api", "status"), "Shows the status of each API endpoint", []string{"endpoint"}, nil)
+	serverMetrics    = metrics{}
+	ZLMediaKitInfo   = prometheus.NewDesc(prometheus.BuildFQName(namespace, "version", "info"), "ZLMediaKit version info.", []string{"branchName", "buildTime", "commitHash"}, nil)
+	ApiStatus        = prometheus.NewDesc(prometheus.BuildFQName(namespace, "api", "status"), "Shows the status of each API endpoint", []string{"endpoint"}, nil)
+	ThreadsLoadTotal = prometheus.NewDesc(prometheus.BuildFQName(namespace, "threads", "load_total"), "Shows the total of network thread", []string{}, nil)
 )
 
 type Exporter struct {
@@ -156,7 +157,7 @@ type versionInfo struct {
 
 func (e *Exporter) extractZLMVersion(ch chan<- prometheus.Metric) {
 	header := http.Header{}
-	header.Add("secret", "yDT7YIpmDdgQJJ8KJ18qMh8DraoIDbzQ")
+	header.Add("secret", ZLMSecret)
 	parsedURL, err := url.Parse("http://127.0.0.1/index/api/version")
 	if err != nil {
 		// 处理错误
@@ -196,7 +197,7 @@ type BuildInfo struct {
 
 func (e *Exporter) extractAPIStatus(ch chan<- prometheus.Metric) {
 	header := http.Header{}
-	header.Add("secret", "yDT7YIpmDdgQJJ8KJ18qMh8DraoIDbzQ")
+	header.Add("secret", ZLMSecret)
 	parsedURL, err := url.Parse("http://127.0.0.1/index/api/getApiList")
 	if err != nil {
 		level.Error(e.logger).Log("msg", "Error parsing URL", "err", err)
@@ -227,6 +228,15 @@ func (e *Exporter) extractAPIStatus(ch chan<- prometheus.Metric) {
 	}
 	for _, endpoint := range apiResponse.Data {
 		ch <- prometheus.MustNewConstMetric(ApiStatus, prometheus.GaugeValue, 1, endpoint)
+	}
+}
+
+func (e *Exporter) extractThreadsLoad(ch chan<- prometheus.Metric) {
+	header := http.Header{}
+	header.Add("secret", ZLMSecret)
+	parsedURL, err := url.Parse("http://127.0.0.1/index/api/getThreadsLoad")
+	if err != nil {
+		level.Error(e.logger).Log("msg", "Error parsing URL", "err", err)
 	}
 }
 
