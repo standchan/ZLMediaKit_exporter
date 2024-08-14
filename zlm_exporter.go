@@ -119,18 +119,6 @@ func NewExporter(logger log.Logger, opts Options) (*Exporter, error) {
 	return exporter, nil
 }
 
-func newServerMetric(metricName string, docString string, t prometheus.ValueType, constLabels prometheus.Labels) metricInfo {
-	return metricInfo{
-		Desc: prometheus.NewDesc(
-			prometheus.BuildFQName(namespace, "server", metricName),
-			docString,
-			serverLabelNames,
-			constLabels,
-		),
-		Type: t,
-	}
-}
-
 func (e *Exporter) Describe(ch chan<- *prometheus.Desc) {
 	for _, m := range e.serverMetrics {
 		ch <- m.Desc
