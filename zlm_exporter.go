@@ -20,9 +20,10 @@ import (
 	"sync"
 )
 
+// todo: 考虑zlm版本更迭的api字段变动和废弃问题；可以用丢弃指标的方式来处理？
+// todo: 提供所有的指标的文本版本
 const (
 	namespace = "zlmediakit"
-	subsystem = "server"
 )
 
 var (
@@ -38,15 +39,21 @@ type metrics map[int]metricInfo
 
 var (
 	serverMetrics  = metrics{}
-	ZLMediaKitInfo = prometheus.NewDesc(prometheus.BuildFQName(namespace, subsystem, "version_info"), "ZLMediaKit version info.", []string{"branchName", "buildTime", "commitHash"}, nil)
-	ApiStatus      = prometheus.NewDesc(prometheus.BuildFQName(namespace, subsystem, "api_status"), "Shows the status of each API endpoint", []string{"endpoint"}, nil)
+	ZLMediaKitInfo = prometheus.NewDesc(prometheus.BuildFQName(namespace, "zlm", "version_info"), "ZLMediaKit version info.", []string{"branchName", "buildTime", "commitHash"}, nil)
+	ApiStatus      = prometheus.NewDesc(prometheus.BuildFQName(namespace, "api", "status"), "Shows the status of each API endpoint", []string{"endpoint"}, nil)
 
 	// 网络线程相关指标
 	// todo Threads指标可能用constLabels更好？
-	Threads           = prometheus.NewDesc(prometheus.BuildFQName(namespace, subsystem, "threads"), "Network threads", []string{"load", "delay"}, nil)
-	ThreadsTotal      = prometheus.NewDesc(prometheus.BuildFQName(namespace, subsystem, "threads_total"), "Total number of network threads", []string{}, nil)
-	ThreadsLoadTotal  = prometheus.NewDesc(prometheus.BuildFQName(namespace, subsystem, "threads_load_total"), "Total number of network threads load", []string{}, nil)
-	ThreadsDelayTotal = prometheus.NewDesc(prometheus.BuildFQName(namespace, subsystem, "threads_delay_total"), "Total number of network threads delay", []string{}, nil)
+	Threads           = prometheus.NewDesc(prometheus.BuildFQName(namespace, "network", "threads"), "Network threads", []string{"load", "delay"}, nil)
+	ThreadsTotal      = prometheus.NewDesc(prometheus.BuildFQName(namespace, "network", "threads_total"), "Total number of network threads", []string{}, nil)
+	ThreadsLoadTotal  = prometheus.NewDesc(prometheus.BuildFQName(namespace, "network", "threads_load_total"), "Total of network threads load", []string{}, nil)
+	ThreadsDelayTotal = prometheus.NewDesc(prometheus.BuildFQName(namespace, "network", "threads_delay_total"), "Total of network threads delay", []string{}, nil)
+
+	// 工作线程相关指标
+	WorkThreads           = prometheus.NewDesc(prometheus.BuildFQName(namespace, "work", "threads"), "Work threads", []string{"load", "delay"}, nil)
+	WorkThreadsTotal      = prometheus.NewDesc(prometheus.BuildFQName(namespace, "work", "threads_total"), "Total number of work threads", []string{}, nil)
+	WorkThreadsLoadTotal  = prometheus.NewDesc(prometheus.BuildFQName(namespace, "work", "threads_load_total"), "Total of work threads load", []string{}, nil)
+	WorkThreadsDelayTotal = prometheus.NewDesc(prometheus.BuildFQName(namespace, "work", "threads_delay_total"), "Total of work threads delay", []string{}, nil)
 
 	// 主要对象相关指标
 	StatisticsBuffer                = prometheus.NewDesc(prometheus.BuildFQName(namespace, "statistics", "buffer"), "Statistics buffer", []string{}, nil)
@@ -144,18 +151,15 @@ func (e *Exporter) scrape(ch chan<- prometheus.Metric) (up float64) {
 	e.totalScrapes.Inc()
 	e.extractZLMVersion(ch)
 	e.extractAPIStatus(ch)
-	e.extractThreadsLoad(ch)
+	e.extractNetworkThreads(ch)
+	e.extractWorkThreads(ch)
+	e.extractStatistics(ch)
 	return 1
 }
 
-type ZLMVersion struct {
-	Code int               `json:"code"`
-	Data map[string]string `json:"Data"`
-}
-
-type APIStatus struct {
-	Code int      `json:"code"`
-	Data []string `json:"Data"`
+type APIResponse struct {
+	Code int         `json:"code"`
+	Data interface{} `json:"Data"`
 }
 
 func (e *Exporter) fetchHTTP(ch chan<- prometheus.Metric, endpoint string, processFunc func(closer io.ReadCloser) error) {
@@ -187,14 +191,18 @@ func (e *Exporter) fetchHTTP(ch chan<- prometheus.Metric, endpoint string, proce
 
 func (e *Exporter) extractZLMVersion(ch chan<- prometheus.Metric) {
 	fetchFunc := func(body io.ReadCloser) error {
-		var apiResponse ZLMVersion
+		var apiResponse APIResponse
 		if err := json.NewDecoder(body).Decode(&apiResponse); err != nil {
 			return fmt.Errorf("error decoding JSON response: %w", err)
 		}
 		if apiResponse.Code != 0 {
 			return fmt.Errorf("API response code is not 0: %d", apiResponse.Code)
 		}
-		ch <- prometheus.MustNewConstMetric(ZLMediaKitInfo, prometheus.GaugeValue, 1, apiResponse.Data["branchName"], apiResponse.Data["buildTime"], apiResponse.Data["commitHash"])
+		data, ok := apiResponse.Data.(map[string]string)
+		if !ok {
+			return fmt.Errorf("API response data is not a string map")
+		}
+		ch <- prometheus.MustNewConstMetric(ZLMediaKitInfo, prometheus.GaugeValue, 1, data["branchName"], data["buildTime"], data["commitHash"])
 		return nil
 	}
 	e.fetchHTTP(ch, "http://127.0.0.1/index/api/version", fetchFunc)
@@ -202,21 +210,28 @@ func (e *Exporter) extractZLMVersion(ch chan<- prometheus.Metric) {
 
 func (e *Exporter) extractAPIStatus(ch chan<- prometheus.Metric) {
 	processFunc := func(body io.ReadCloser) error {
-		var apiResponse APIStatus
+		var apiResponse APIResponse
+
 		if err := json.NewDecoder(body).Decode(&apiResponse); err != nil {
 			return fmt.Errorf("error decoding JSON response: %w", err)
 		}
 		if apiResponse.Code != 0 {
 			return fmt.Errorf("API response code is not 0: %d", apiResponse.Code)
 		}
-		for _, endpoint := range apiResponse.Data {
+
+		data, ok := apiResponse.Data.([]string)
+		if !ok {
+			return fmt.Errorf("API response data is not a string array")
+		}
+
+		for _, endpoint := range data {
 			ch <- prometheus.MustNewConstMetric(ApiStatus, prometheus.GaugeValue, 1, endpoint)
 		}
 		return nil
 	}
 	e.fetchHTTP(ch, "http://127.0.0.1/index/api/getApiList", processFunc)
 }
-func (e *Exporter) extractThreadsLoad(ch chan<- prometheus.Metric) {
+func (e *Exporter) extractNetworkThreads(ch chan<- prometheus.Metric) {
 	processFunc := func(body io.ReadCloser) error {
 		type ThreadsLoad struct {
 			Code int `json:"code"`
@@ -248,13 +263,70 @@ func (e *Exporter) extractThreadsLoad(ch chan<- prometheus.Metric) {
 	e.fetchHTTP(ch, "http://127.0.0.1/index/api/getThreadsLoad", processFunc)
 }
 
+func (e *Exporter) extractWorkThreads(ch chan<- prometheus.Metric) {
+	processFunc := func(body io.ReadCloser) error {
+		type ThreadsLoad struct {
+			Code int `json:"code"`
+			Data []struct {
+				Load  float64 `json:"load"`
+				Delay float64 `json:"delay"`
+			}
+		}
+		var threadsLoad ThreadsLoad
+		if err := json.NewDecoder(body).Decode(&threadsLoad); err != nil {
+			return fmt.Errorf("error decoding JSON response: %w", err)
+		}
+		if threadsLoad.Code != 0 {
+			return fmt.Errorf("API response code is not 0: %d", threadsLoad.Code)
+		}
+		loadTotal := float64(0)
+		delayTotal := float64(0)
+		total := float64(0)
+		for _, data := range threadsLoad.Data {
+			loadTotal += data.Load
+			delayTotal += data.Delay
+			total++
+		}
+		ch <- prometheus.MustNewConstMetric(WorkThreadsTotal, prometheus.GaugeValue, total)
+		ch <- prometheus.MustNewConstMetric(WorkThreadsLoadTotal, prometheus.GaugeValue, loadTotal)
+		ch <- prometheus.MustNewConstMetric(WorkThreadsDelayTotal, prometheus.GaugeValue, delayTotal)
+		return nil
+	}
+	e.fetchHTTP(ch, "http://127.0.0.1/index/api/getWorkThreadsLoad", processFunc)
+}
+
 func (e *Exporter) extractStatistics(ch chan<- prometheus.Metric) {
 	processFunc := func(body io.ReadCloser) error {
-		type Statistics struct {
-			Code int                    `json:"code"`
-			Data map[string]interface{} `json:"Data"`
+		var apiResponse APIResponse
+		if err := json.NewDecoder(body).Decode(&apiResponse); err != nil {
+			return fmt.Errorf("error decoding JSON response: %w", err)
 		}
+		if apiResponse.Code != 0 {
+			return fmt.Errorf("API response code is not 0: %d", apiResponse.Code)
+		}
+		data, ok := apiResponse.Data.(map[string]float64)
+		if !ok {
+			return fmt.Errorf("API response data is not a float64 map")
+		}
+		ch <- prometheus.MustNewConstMetric(StatisticsBuffer, prometheus.GaugeValue, data["buffer"])
+		ch <- prometheus.MustNewConstMetric(StatisticsBufferLikeString, prometheus.GaugeValue, data["bufferLikeString"])
+		ch <- prometheus.MustNewConstMetric(StatisticsBufferList, prometheus.GaugeValue, data["bufferList"])
+		ch <- prometheus.MustNewConstMetric(StatisticsBufferRaw, prometheus.GaugeValue, data["bufferRaw"])
+		ch <- prometheus.MustNewConstMetric(StatisticsFrame, prometheus.GaugeValue, data["frame"])
+		ch <- prometheus.MustNewConstMetric(StatisticsFrameImp, prometheus.GaugeValue, data["frameImp"])
+		ch <- prometheus.MustNewConstMetric(StatisticsMediaSource, prometheus.GaugeValue, data["mediaSource"])
+		ch <- prometheus.MustNewConstMetric(StatisticsMultiMediaSourceMuxer, prometheus.GaugeValue, data["multiMediaSourceMuxer"])
+		ch <- prometheus.MustNewConstMetric(StatisticsRtmpPacket, prometheus.GaugeValue, data["rtmpPacket"])
+		ch <- prometheus.MustNewConstMetric(StatisticsRtpPacket, prometheus.GaugeValue, data["rtpPacket"])
+		ch <- prometheus.MustNewConstMetric(StatisticsSocket, prometheus.GaugeValue, data["socket"])
+		ch <- prometheus.MustNewConstMetric(StatisticsTcpClient, prometheus.GaugeValue, data["tcpClient"])
+		ch <- prometheus.MustNewConstMetric(StatisticsTcpServer, prometheus.GaugeValue, data["tcpServer"])
+		ch <- prometheus.MustNewConstMetric(StatisticsTcpSession, prometheus.GaugeValue, data["tcpSession"])
+		ch <- prometheus.MustNewConstMetric(StatisticsUdpServer, prometheus.GaugeValue, data["udpServer"])
+		ch <- prometheus.MustNewConstMetric(StatisticsUdpSession, prometheus.GaugeValue, data["udpSession"])
+		return nil
 	}
+	e.fetchHTTP(ch, "http://127.0.0.1/index/api/getStatistic", processFunc)
 }
 
 // doc: https://prometheus.io/docs/instrumenting/writing_exporters/
