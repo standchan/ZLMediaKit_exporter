@@ -22,6 +22,8 @@ import (
 
 // todo: 考虑zlm版本更迭的api字段变动和废弃问题；可以用丢弃指标的方式来处理？
 // todo: 提供所有的指标的文本版本
+// todo: 提供grafana的演示地址
+// todo：考虑暴露 metric 演示api
 const (
 	namespace = "zlmediakit"
 )
