@@ -1,7 +1,6 @@
 package main
 
 import (
-	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"github.com/alecthomas/kingpin/v2"
@@ -18,11 +17,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"sort"
-	"strconv"
-	"strings"
 	"sync"
-	"time"
 )
 
 const (
@@ -41,19 +36,6 @@ type metricInfo struct {
 
 type metrics map[int]metricInfo
 
-func (m metrics) String() string {
-	keys := make([]int, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	sort.Ints(keys)
-	s := make([]string, len(keys))
-	for i, k := range keys {
-		s[i] = strconv.Itoa(k)
-	}
-	return strings.Join(s, ",")
-}
-
 var (
 	serverMetrics  = metrics{}
 	ZLMediaKitInfo = prometheus.NewDesc(prometheus.BuildFQName(namespace, subsystem, "version_info"), "ZLMediaKit version info.", []string{"branchName", "buildTime", "commitHash"}, nil)
@@ -65,6 +47,24 @@ var (
 	ThreadsTotal      = prometheus.NewDesc(prometheus.BuildFQName(namespace, subsystem, "threads_total"), "Total number of network threads", []string{}, nil)
 	ThreadsLoadTotal  = prometheus.NewDesc(prometheus.BuildFQName(namespace, subsystem, "threads_load_total"), "Total number of network threads load", []string{}, nil)
 	ThreadsDelayTotal = prometheus.NewDesc(prometheus.BuildFQName(namespace, subsystem, "threads_delay_total"), "Total number of network threads delay", []string{}, nil)
+
+	// 主要对象相关指标
+	StatisticsBuffer                = prometheus.NewDesc(prometheus.BuildFQName(namespace, "statistics", "buffer"), "Statistics buffer", []string{}, nil)
+	StatisticsBufferLikeString      = prometheus.NewDesc(prometheus.BuildFQName(namespace, "statistics", "buffer_like_string"), "Statistics BufferLikeString", []string{}, nil)
+	StatisticsBufferList            = prometheus.NewDesc(prometheus.BuildFQName(namespace, "statistics", "buffer_list"), "Statistics BufferList", []string{}, nil)
+	StatisticsBufferRaw             = prometheus.NewDesc(prometheus.BuildFQName(namespace, "statistics", "buffer_raw"), "Statistics BufferRaw", []string{}, nil)
+	StatisticsFrame                 = prometheus.NewDesc(prometheus.BuildFQName(namespace, "statistics", "frame"), "Statistics Frame", []string{}, nil)
+	StatisticsFrameImp              = prometheus.NewDesc(prometheus.BuildFQName(namespace, "statistics", "frame_imp"), "Statistics FrameImp", []string{}, nil)
+	StatisticsMediaSource           = prometheus.NewDesc(prometheus.BuildFQName(namespace, "statistics", "media_source"), "Statistics MediaSource", []string{}, nil)
+	StatisticsMultiMediaSourceMuxer = prometheus.NewDesc(prometheus.BuildFQName(namespace, "statistics", "multi_media_source_muxer"), "Statistics MultiMediaSourceMuxer", []string{}, nil)
+	StatisticsRtmpPacket            = prometheus.NewDesc(prometheus.BuildFQName(namespace, "statistics", "rtmp_packet"), "Statistics RtmpPacket", []string{}, nil)
+	StatisticsRtpPacket             = prometheus.NewDesc(prometheus.BuildFQName(namespace, "statistics", "rtp_packet"), "Statistics RtpPacket", []string{}, nil)
+	StatisticsSocket                = prometheus.NewDesc(prometheus.BuildFQName(namespace, "statistics", "socket"), "Statistics Socket", []string{}, nil)
+	StatisticsTcpClient             = prometheus.NewDesc(prometheus.BuildFQName(namespace, "statistics", "tcp_client"), "Statistics TcpClient", []string{}, nil)
+	StatisticsTcpServer             = prometheus.NewDesc(prometheus.BuildFQName(namespace, "statistics", "tcp_server"), "Statistics TcpServer", []string{}, nil)
+	StatisticsTcpSession            = prometheus.NewDesc(prometheus.BuildFQName(namespace, "statistics", "tcp_session"), "Statistics TcpSession", []string{}, nil)
+	StatisticsUdpServer             = prometheus.NewDesc(prometheus.BuildFQName(namespace, "statistics", "udp_server"), "Statistics UdpServer", []string{}, nil)
+	StatisticsUdpSession            = prometheus.NewDesc(prometheus.BuildFQName(namespace, "statistics", "udp_session"), "Statistics UdpSession", []string{}, nil)
 )
 
 type Exporter struct {
@@ -158,7 +158,7 @@ type APIStatus struct {
 	Data []string `json:"Data"`
 }
 
-func (e *Exporter) extractMetrics(ch chan<- prometheus.Metric, endpoint string, fetchHTTP func(closer io.ReadCloser) error) {
+func (e *Exporter) fetchHTTP(ch chan<- prometheus.Metric, endpoint string, processFunc func(closer io.ReadCloser) error) {
 	header := http.Header{}
 	header.Add("secret", ZLMSecret)
 	parsedURL, err := url.Parse(endpoint)
@@ -180,7 +180,7 @@ func (e *Exporter) extractMetrics(ch chan<- prometheus.Metric, endpoint string, 
 	}
 	defer res.Body.Close()
 
-	if err := fetchHTTP(res.Body); err != nil {
+	if err = processFunc(res.Body); err != nil {
 		level.Error(e.logger).Log("msg", "Error processing response", "err", err)
 	}
 }
@@ -197,7 +197,7 @@ func (e *Exporter) extractZLMVersion(ch chan<- prometheus.Metric) {
 		ch <- prometheus.MustNewConstMetric(ZLMediaKitInfo, prometheus.GaugeValue, 1, apiResponse.Data["branchName"], apiResponse.Data["buildTime"], apiResponse.Data["commitHash"])
 		return nil
 	}
-	e.extractMetrics(ch, "http://127.0.0.1/index/api/version", fetchFunc)
+	e.fetchHTTP(ch, "http://127.0.0.1/index/api/version", fetchFunc)
 }
 
 func (e *Exporter) extractAPIStatus(ch chan<- prometheus.Metric) {
@@ -214,7 +214,7 @@ func (e *Exporter) extractAPIStatus(ch chan<- prometheus.Metric) {
 		}
 		return nil
 	}
-	e.extractMetrics(ch, "http://127.0.0.1/index/api/getApiList", processFunc)
+	e.fetchHTTP(ch, "http://127.0.0.1/index/api/getApiList", processFunc)
 }
 func (e *Exporter) extractThreadsLoad(ch chan<- prometheus.Metric) {
 	processFunc := func(body io.ReadCloser) error {
@@ -245,28 +245,15 @@ func (e *Exporter) extractThreadsLoad(ch chan<- prometheus.Metric) {
 		ch <- prometheus.MustNewConstMetric(ThreadsDelayTotal, prometheus.GaugeValue, delayTotal)
 		return nil
 	}
-	e.extractMetrics(ch, "http://127.0.0.1/index/api/getThreadsLoad", processFunc)
+	e.fetchHTTP(ch, "http://127.0.0.1/index/api/getThreadsLoad", processFunc)
 }
-func fetchHTTP(uri string, sslVerify, proxyFromEnv bool, timeout time.Duration) func() (io.ReadCloser, error) {
-	tr := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: !sslVerify}}
-	if proxyFromEnv {
-		tr.Proxy = http.ProxyFromEnvironment
-	}
-	client := http.Client{
-		Timeout:   timeout,
-		Transport: tr,
-	}
 
-	return func() (io.ReadCloser, error) {
-		resp, err := client.Get(uri)
-		if err != nil {
-			return nil, err
+func (e *Exporter) extractStatistics(ch chan<- prometheus.Metric) {
+	processFunc := func(body io.ReadCloser) error {
+		type Statistics struct {
+			Code int                    `json:"code"`
+			Data map[string]interface{} `json:"Data"`
 		}
-		if !(resp.StatusCode >= 200 && resp.StatusCode < 300) {
-			resp.Body.Close()
-			return nil, fmt.Errorf("HTTP status %d", resp.StatusCode)
-		}
-		return resp.Body, nil
 	}
 }
 
