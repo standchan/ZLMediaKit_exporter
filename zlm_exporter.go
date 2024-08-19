@@ -74,6 +74,25 @@ var (
 	StatisticsTcpSession            = prometheus.NewDesc(prometheus.BuildFQName(namespace, "statistics", "tcp_session"), "Statistics TcpSession", []string{}, nil)
 	StatisticsUdpServer             = prometheus.NewDesc(prometheus.BuildFQName(namespace, "statistics", "udp_server"), "Statistics UdpServer", []string{}, nil)
 	StatisticsUdpSession            = prometheus.NewDesc(prometheus.BuildFQName(namespace, "statistics", "udp_session"), "Statistics UdpSession", []string{}, nil)
+
+	// 服务器配置相关指标
+	ServerApiInfo   = prometheus.NewDesc(prometheus.BuildFQName(namespace, "server", "api_info"), "Server config about api", []string{"apiDebug", "defaultSnap", "downloadRoot", "secret", "snapRoot"}, nil)
+	ServerCluster   = prometheus.NewDesc(prometheus.BuildFQName(namespace, "server", "cluster_info"), "Server config about cluster", []string{"origin_url", "retry_Count", "timeout_sec"}, nil)
+	ServerFFmpeg    = prometheus.NewDesc(prometheus.BuildFQName(namespace, "server", "ffmpeg_info"), "Server config about ffmpeg", []string{"bin", "cmd", "log", "restart_sec", "snap"}, nil)
+	ServerGeneral   = prometheus.NewDesc(prometheus.BuildFQName(namespace, "server", "general_info"), "Server config about general", []string{"broadcast_player_count_changed", "check_nvidia_dev", "enableVhost", "enable_ffmpeg_log", "flowThreshold", "maxStreamWaitMS", "mediaServerId", "mergeWriteMS", "resetWhenRePlay", "streamNoneReaderDelayMS", "unready_frame_cache", "wait_add_track_ms", "wait_track_ready_ms"}, nil)
+	ServerHls       = prometheus.NewDesc(prometheus.BuildFQName(namespace, "server", "hls_info"), "Server config about hls", []string{"broadcastRecordTs", "deleteDelaySec", "fastRegister", "fileBufSize", "segDelay", "segKeep", "segNum", "segRetain"}, nil)
+	ServerHook      = prometheus.NewDesc(prometheus.BuildFQName(namespace, "server", "hook_info"), "Server config about hook", []string{"alive_interval", "enable", "on_flow_report", "on_http_access", "on_play", "on_publish", "on_record_mp4", "on_record_ts", "on_rtp_server_timeout", "on_rtsp_auth", "on_rtsp_realm", "on_send_rtp_stopped", "on_server_exited", "on_server_keepalive", "on_server_started", "on_shell_login", "on_stream_changed", "on_stream_none_reader", "on_stream_not_found", "retry", "retry_delay", "stream_changed_schemas", "timeoutSec"}, nil)
+	ServerHTTP      = prometheus.NewDesc(prometheus.BuildFQName(namespace, "server", "http_info"), "Server config about http", []string{"allow_cross_domains", "allow_ip_range", "charSet", "dirMenu", "forbidCacheSuffix", "forwarded_ip_header", "keepAliveSecond", "maxReqSize", "notFound", "port", "rootPath", "sendBufSize", "sslport", "virtualPath"}, nil)
+	ServerMulticast = prometheus.NewDesc(prometheus.BuildFQName(namespace, "server", "multicast_info"), "Server config about multicast", []string{"addrMax", "addrMin", "udpTTL"}, nil)
+	ServerProtocol  = prometheus.NewDesc(prometheus.BuildFQName(namespace, "server", "protocol_info"), "Server config about protocol", []string{"add_mute_audio", "auto_close", "continue_push_ms", "enable_audio", "enable_fmp4", "enable_hls", "enable_hls_fmp4", "enable_mp4", "enable_rtmp", "enable_rtsp", "enable_ts", "fmp4_demand", "hls_demand", "hls_save_path", "modify_stamp", "mp4_as_player", "mp4_max_second", "mp4_save_path", "paced_sender_ms", "rtmp_demand", "rtsp_demand", "ts_demand"}, nil)
+	ServerRecord    = prometheus.NewDesc(prometheus.BuildFQName(namespace, "server", "record_info"), "Server config about record", []string{"appName", "enableFmp4", "fastStart", "fileBufSize", "fileRepeat", "sampleMS"}, nil)
+	ServerRtx       = prometheus.NewDesc(prometheus.BuildFQName(namespace, "server", "rtx_info"), "Server config about rtx", []string{"externIP", "maxNackMS", "max_bitrate", "min_bitrate", "nackIntervalRatio", "nackMaxCount", "nackMaxMS", "nackMaxSize", "nackRtpSize", "port", "preferredCodecA", "preferredCodecV", "rembBitRate", "rtpCacheCheckInterval", "start_bitrate", "tcpPort", "timeoutSec"}, nil)
+	ServerRtmp      = prometheus.NewDesc(prometheus.BuildFQName(namespace, "server", "rtmp_info"), "Server config about rtmp", []string{"directProxy", "enhanced", "handshakeSecond", "keepAliveSecond", "port", "sslport"}, nil)
+	ServerRtp       = prometheus.NewDesc(prometheus.BuildFQName(namespace, "server", "rtp_info"), "Server config about rtp", []string{"audioMtuSize", "h264_stap_a", "lowLatency", "rtpMaxSize", "videoMtuSize"}, nil)
+	ServerRtpProxy  = prometheus.NewDesc(prometheus.BuildFQName(namespace, "server", "rtp_proxy_info"), "Server config about rtp_proxy", []string{"dumpDir", "gop_cache", "h264_pt", "h265_pt", "opus_pt", "port", "port_range", "ps_pt", "rtp_g711_dur_ms", "timeoutSec", "udp_recv_socket_buffer"}, nil)
+	ServerRtsp      = prometheus.NewDesc(prometheus.BuildFQName(namespace, "server", "rtsp_info"), "Server config about rtsp", []string{"authBasic", "directProxy", "handshakeSecond", "keepAliveSecond", "lowLatency", "port", "rtpTransportType", "sslport"}, nil)
+	ServerShell     = prometheus.NewDesc(prometheus.BuildFQName(namespace, "server", "shell_info"), "Server config about shell", []string{"maxReqSize", "port"}, nil)
+	ServerSrt       = prometheus.NewDesc(prometheus.BuildFQName(namespace, "server", "srt_info"), "Server config about srt", []string{"latencyMul", "pktBufSize", "port", "timeoutSec"}, nil)
 )
 
 type Exporter struct {
@@ -144,6 +163,7 @@ func (e *Exporter) scrape(ch chan<- prometheus.Metric) (up float64) {
 	e.extractNetworkThreads(ch)
 	e.extractWorkThreads(ch)
 	e.extractStatistics(ch)
+	e.extractServerConfig(ch)
 	return 1
 }
 
@@ -252,7 +272,6 @@ func (e *Exporter) extractNetworkThreads(ch chan<- prometheus.Metric) {
 	}
 	e.fetchHTTP(ch, "http://127.0.0.1/index/api/getThreadsLoad", processFunc)
 }
-
 func (e *Exporter) extractWorkThreads(ch chan<- prometheus.Metric) {
 	processFunc := func(body io.ReadCloser) error {
 		type ThreadsLoad struct {
@@ -284,7 +303,6 @@ func (e *Exporter) extractWorkThreads(ch chan<- prometheus.Metric) {
 	}
 	e.fetchHTTP(ch, "http://127.0.0.1/index/api/getWorkThreadsLoad", processFunc)
 }
-
 func (e *Exporter) extractStatistics(ch chan<- prometheus.Metric) {
 	processFunc := func(body io.ReadCloser) error {
 		var apiResponse APIResponse
@@ -317,6 +335,44 @@ func (e *Exporter) extractStatistics(ch chan<- prometheus.Metric) {
 		return nil
 	}
 	e.fetchHTTP(ch, "http://127.0.0.1/index/api/getStatistic", processFunc)
+}
+func (e *Exporter) extractServerConfig(ch chan<- prometheus.Metric) {
+	processFunc := func(body io.ReadCloser) error {
+		type APIResponse struct {
+			Code int                 `json:"code"`
+			Data []map[string]string `json:"Data"`
+		}
+		var apiResponse APIResponse
+		if err := json.NewDecoder(body).Decode(&apiResponse); err != nil {
+			return fmt.Errorf("error decoding JSON response: %w", err)
+		}
+		if apiResponse.Code != 0 {
+			return fmt.Errorf("API response code is not 0: %d", apiResponse.Code)
+		}
+
+		for i, v := range apiResponse.Data {
+			ch <- prometheus.MustNewConstMetric(ServerApiInfo, prometheus.GaugeValue, float64(i), v["api.apiDebug"], v["api.defaultSnap"], v["api.downloadRoot"], v["api.secret"], v["api.snapRoot"])
+			ch <- prometheus.MustNewConstMetric(ServerCluster, prometheus.GaugeValue, float64(i), v["cluster.origin_url"], v["cluster.retry_Count"], v["cluster.timeout_sec"])
+			ch <- prometheus.MustNewConstMetric(ServerFFmpeg, prometheus.GaugeValue, float64(i), v["ffmpeg.bin"], v["ffmpeg.cmd"], v["ffmpeg.log"], v["ffmpeg.restart_sec"], v["ffmpeg.snap"])
+			ch <- prometheus.MustNewConstMetric(ServerGeneral, prometheus.GaugeValue, float64(i), v["general.broadcast_player_count_changed"], v["general.check_nvidia_dev"], v["general.enableVhost"], v["general.enable_ffmpeg_log"], v["general.flowThreshold"], v["general.maxStreamWaitMS"], v["general.mediaServerId"], v["general.mergeWriteMS"], v["general.resetWhenRePlay"], v["general.streamNoneReaderDelayMS"], v["general.unready_frame_cache"], v["general.wait_add_track_ms"], v["general.wait_track_ready_ms"])
+			ch <- prometheus.MustNewConstMetric(ServerHls, prometheus.GaugeValue, float64(i), v["hls.broadcastRecordTs"], v["hls.deleteDelaySec"], v["hls.fastRegister"], v["hls.fileBufSize"], v["hls.segDelay"], v["hls.segKeep"], v["hls.segNum"], v["hls.segRetain"])
+			ch <- prometheus.MustNewConstMetric(ServerHook, prometheus.GaugeValue, float64(i), v["hook.alive_interval"], v["hook.enable"], v["hook.on_flow_report"], v["hook.on_http_access"], v["hook.on_play"], v["hook.on_publish"], v["hook.on_record_mp4"], v["hook.on_record_ts"], v["hook.on_rtp_server_timeout"], v["hook.on_rtsp_auth"], v["hook.on_rtsp_realm"], v["hook.on_send_rtp_stopped"], v["hook.on_server_exited"], v["hook.on_server_keepalive"], v["hook.on_server_started"], v["hook.on_shell_login"], v["hook.on_stream_changed"], v["hook.on_stream_none_reader"], v["hook.on_stream_not_found"], v["hook.retry"], v["hook.retry_delay"], v["hook.stream_changed_schemas"], v["hook.timeoutSec"])
+			ch <- prometheus.MustNewConstMetric(ServerHTTP, prometheus.GaugeValue, float64(i), v["http.allow_cross_domains"], v["http.allow_ip_range"], v["http.charSet"], v["http.dirMenu"], v["http.forbidCacheSuffix"], v["http.forwarded_ip_header"], v["http.keepAliveSecond"], v["http.maxReqSize"], v["http.notFound"], v["http.port"], v["http.rootPath"], v["http.sendBufSize"], v["http.sslport"], v["http.virtualPath"])
+			ch <- prometheus.MustNewConstMetric(ServerMulticast, prometheus.GaugeValue, float64(i), v["multicast.addrMax"], v["multicast.addrMin"], v["multicast.udpTTL"])
+			ch <- prometheus.MustNewConstMetric(ServerProtocol, prometheus.GaugeValue, float64(i), v["protocol.add_mute_audio"], v["protocol.auto_close"], v["protocol.continue_push_ms"], v["protocol.enable_audio"], v["protocol.enable_fmp4"], v["protocol.enable_hls"], v["protocol.enable_hls_fmp4"], v["protocol.enable_mp4"], v["protocol.enable_rtmp"], v["protocol.enable_rtsp"], v["protocol.enable_ts"], v["protocol.fmp4_demand"], v["protocol.hls_demand"], v["protocol.hls_save_path"], v["protocol.modify_stamp"], v["protocol.mp4_as_player"], v["protocol.mp4_max_second"], v["protocol.mp4_save_path"], v["protocol.paced_sender_ms"], v["protocol.rtmp_demand"], v["protocol.rtsp_demand"], v["protocol.ts_demand"])
+			ch <- prometheus.MustNewConstMetric(ServerRecord, prometheus.GaugeValue, float64(i), v["record.appName"], v["record.enableFmp4"], v["record.fastStart"], v["record.fileBufSize"], v["record.fileRepeat"], v["record.sampleMS"])
+			ch <- prometheus.MustNewConstMetric(ServerRtx, prometheus.GaugeValue, float64(i), v["rtx.externIP"], v["rtx.maxNackMS"], v["rtx.max_bitrate"], v["rtx.min_bitrate"], v["rtx.nackIntervalRatio"], v["rtx.nackMaxCount"], v["rtx.nackMaxMS"], v["rtx.nackMaxSize"], v["rtx.nackRtpSize"], v["rtx.port"], v["rtx.preferredCodecA"], v["rtx.preferredCodecV"], v["rtx.rembBitRate"], v["rtx.rtpCacheCheckInterval"], v["rtx.start_bitrate"], v["rtx.tcpPort"], v["rtx.timeoutSec"])
+			ch <- prometheus.MustNewConstMetric(ServerRtmp, prometheus.GaugeValue, float64(i), v["rtmp.directProxy"], v["rtmp.enhanced"], v["rtmp.handshakeSecond"], v["rtmp.keepAliveSecond"], v["rtmp.port"], v["rtmp.sslport"])
+			ch <- prometheus.MustNewConstMetric(ServerRtp, prometheus.GaugeValue, float64(i), v["rtp.audioMtuSize"], v["rtp.h264_stap_a"], v["rtp.lowLatency"], v["rtp.rtpMaxSize"], v["rtp.videoMtuSize"])
+			ch <- prometheus.MustNewConstMetric(ServerRtpProxy, prometheus.GaugeValue, float64(i), v["rtp_proxy.dumpDir"], v["rtp_proxy.gop_cache"], v["rtp_proxy.h264_pt"], v["rtp_proxy.h265_pt"], v["rtp_proxy.opus_pt"], v["rtp_proxy.port"], v["rtp_proxy.port_range"], v["rtp_proxy.ps_pt"], v["rtp_proxy.rtp_g711_dur_ms"], v["rtp_proxy.timeoutSec"], v["rtp_proxy.udp_recv_socket_buffer"])
+			ch <- prometheus.MustNewConstMetric(ServerRtsp, prometheus.GaugeValue, float64(i), v["rtsp.authBasic"], v["rtsp.directProxy"], v["rtsp.handshakeSecond"], v["rtsp.keepAliveSecond"], v["rtsp.lowLatency"], v["rtsp.port"], v["rtsp.rtpTransportType"], v["rtsp.sslport"])
+			ch <- prometheus.MustNewConstMetric(ServerShell, prometheus.GaugeValue, float64(i), v["shell.maxReqSize"], v["shell.port"])
+			ch <- prometheus.MustNewConstMetric(ServerSrt, prometheus.GaugeValue, float64(i), v["srt.latencyMul"], v["srt.pktBufSize"], v["srt.port"], v["srt.timeoutSec"])
+		}
+
+		return nil
+	}
+	e.fetchHTTP(ch, "http://127.0.0.1/index/api/getServerConfig", processFunc)
 }
 
 // doc: https://prometheus.io/docs/instrumenting/writing_exporters/
