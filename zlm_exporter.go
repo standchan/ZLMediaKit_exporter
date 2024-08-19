@@ -418,12 +418,3 @@ func main() {
 	}
 
 }
-
-var apiURList = []string{
-	"/index/api/getApiList",
-}
-
-// 当前方向
-// 先把exporter运行起来，整体跑起来
-// 后续再慢慢补充指标和优化代码
-// 最后再补充测试代码和其他配置以及文档内容
