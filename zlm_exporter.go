@@ -93,6 +93,9 @@ var (
 	ServerRtsp      = prometheus.NewDesc(prometheus.BuildFQName(namespace, "server", "rtsp_info"), "Server config about rtsp", []string{"authBasic", "directProxy", "handshakeSecond", "keepAliveSecond", "lowLatency", "port", "rtpTransportType", "sslport"}, nil)
 	ServerShell     = prometheus.NewDesc(prometheus.BuildFQName(namespace, "server", "shell_info"), "Server config about shell", []string{"maxReqSize", "port"}, nil)
 	ServerSrt       = prometheus.NewDesc(prometheus.BuildFQName(namespace, "server", "srt_info"), "Server config about srt", []string{"latencyMul", "pktBufSize", "port", "timeoutSec"}, nil)
+
+	// session 相关指标
+	Session = prometheus.NewDesc(prometheus.BuildFQName(namespace, "session", "session_info"), "Session info", []string{"id", "identifier", "local_ip", "local_port", "peer_ip", "peer_port", "typeid"}, nil)
 )
 
 type Exporter struct {
@@ -164,6 +167,7 @@ func (e *Exporter) scrape(ch chan<- prometheus.Metric) (up float64) {
 	e.extractWorkThreads(ch)
 	e.extractStatistics(ch)
 	e.extractServerConfig(ch)
+	e.extractSession(ch)
 	return 1
 }
 
@@ -373,6 +377,34 @@ func (e *Exporter) extractServerConfig(ch chan<- prometheus.Metric) {
 		return nil
 	}
 	e.fetchHTTP(ch, "http://127.0.0.1/index/api/getServerConfig", processFunc)
+}
+func (e *Exporter) extractSession(ch chan<- prometheus.Metric) {
+	processFunc := func(body io.ReadCloser) error {
+		type APIResponse struct {
+			Code int                      `json:"code"`
+			Data []map[string]interface{} `json:"Data"`
+		}
+		var apiResponse APIResponse
+		if err := json.NewDecoder(body).Decode(&apiResponse); err != nil {
+			return fmt.Errorf("error decoding JSON response: %w", err)
+		}
+		if apiResponse.Code != 0 {
+			return fmt.Errorf("API response code is not 0: %d", apiResponse.Code)
+		}
+		for i, v := range apiResponse.Data {
+			id := fmt.Sprint(v["id"])
+			identifier := fmt.Sprint(v["identifier"])
+			localIP := fmt.Sprint(v["local_ip"])
+			localPort := fmt.Sprint(v["local_port"])
+			peerIP := fmt.Sprint(v["peer_ip"])
+			peerPort := fmt.Sprint(v["peer_port"])
+			typeID := fmt.Sprint(v["typeid"])
+			ch <- prometheus.MustNewConstMetric(Session, prometheus.GaugeValue, float64(i), id, identifier, localIP, localPort, peerIP, peerPort, typeID)
+		}
+		return nil
+	}
+	e.fetchHTTP(ch, "http://127.0.0.1/index/api/getAllSession", processFunc)
+
 }
 
 // doc: https://prometheus.io/docs/instrumenting/writing_exporters/
