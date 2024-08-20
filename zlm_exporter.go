@@ -37,10 +37,7 @@ type metricInfo struct {
 	Type prometheus.ValueType
 }
 
-type metrics map[int]metricInfo
-
 var (
-	serverMetrics  = metrics{}
 	ZLMediaKitInfo = prometheus.NewDesc(prometheus.BuildFQName(namespace, "zlm", "version_info"), "ZLMediaKit version info.", []string{"branchName", "buildTime", "commitHash"}, nil)
 	ApiStatus      = prometheus.NewDesc(prometheus.BuildFQName(namespace, "api", "status"), "Shows the status of each API endpoint", []string{"endpoint"}, nil)
 
