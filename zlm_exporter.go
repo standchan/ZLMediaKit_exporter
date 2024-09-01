@@ -23,7 +23,7 @@ import (
 // todo: 考虑zlm版本更迭的api字段变动和废弃问题；可以用丢弃指标的方式来处理？
 // todo: 提供所有的指标的文本版本
 // todo: 提供grafana的演示地址
-// todo：考虑暴露 metric 演示api
+// todo：考虑暴露 metric 演示url
 const (
 	namespace = "zlmediakit"
 )
@@ -103,17 +103,16 @@ type Exporter struct {
 	totalScrapes  prometheus.Counter
 	serverMetrics map[int]metricInfo
 	logger        log.Logger
-
-	mux *http.ServeMux
-
-	buildInfo BuildInfo
+	option        Options
+	mux           *http.ServeMux
 }
 
 type Options struct {
-	Namespace string
-
-	Registry  *prometheus.Registry
-	BuildInfo BuildInfo
+	Namespace  string
+	apiHost    string
+	Registry   *prometheus.Registry
+	BuildInfo  BuildInfo
+	CaCertFile string
 }
 
 type BuildInfo struct {
@@ -122,7 +121,7 @@ type BuildInfo struct {
 	Date      string
 }
 
-func NewExporter(logger log.Logger, opts Options) (*Exporter, error) {
+func NewExporter(logger log.Logger, opts ...OptionFunc) (*Exporter, error) {
 	exporter := &Exporter{
 		up: prometheus.NewGauge(prometheus.GaugeOpts{
 			Namespace: namespace,
@@ -136,8 +135,37 @@ func NewExporter(logger log.Logger, opts Options) (*Exporter, error) {
 		}),
 		logger: logger,
 	}
+	for _, opt := range opts {
+		opt(exporter)
+	}
 
 	return exporter, nil
+}
+
+type OptionFunc func(exporter *Exporter)
+
+func WithNamespace(namespace string) OptionFunc {
+	return func(e *Exporter) {
+		e.option.Namespace = namespace
+	}
+}
+
+func WithRegistry(registry *prometheus.Registry) OptionFunc {
+	return func(e *Exporter) {
+		e.option.Registry = registry
+	}
+}
+
+func WithBuildInfo(buildInfo BuildInfo) OptionFunc {
+	return func(e *Exporter) {
+		e.option.BuildInfo = buildInfo
+	}
+}
+
+func WithCaCertFile(caCertFile string) OptionFunc {
+	return func(e *Exporter) {
+		e.option.CaCertFile = caCertFile
+	}
 }
 
 func (e *Exporter) Describe(ch chan<- *prometheus.Desc) {
@@ -209,11 +237,11 @@ func (e *Exporter) extractZLMVersion(ch chan<- prometheus.Metric) {
 		if apiResponse.Code != 0 {
 			return fmt.Errorf("API response code is not 0: %d", apiResponse.Code)
 		}
-		data, ok := apiResponse.Data.(map[string]string)
+		data, ok := apiResponse.Data.(map[string]interface{})
 		if !ok {
 			return fmt.Errorf("API response data is not a string map")
 		}
-		ch <- prometheus.MustNewConstMetric(ZLMediaKitInfo, prometheus.GaugeValue, 1, data["branchName"], data["buildTime"], data["commitHash"])
+		ch <- prometheus.MustNewConstMetric(ZLMediaKitInfo, prometheus.GaugeValue, 1, data["branchName"].(string), data["buildTime"].(string), data["commitHash"].(string))
 		return nil
 	}
 	e.fetchHTTP(ch, "http://127.0.0.1/index/api/version", fetchFunc)
@@ -230,13 +258,13 @@ func (e *Exporter) extractAPIStatus(ch chan<- prometheus.Metric) {
 			return fmt.Errorf("API response code is not 0: %d", apiResponse.Code)
 		}
 
-		data, ok := apiResponse.Data.([]string)
+		data, ok := apiResponse.Data.([]interface{})
 		if !ok {
 			return fmt.Errorf("API response data is not a string array")
 		}
 
 		for _, endpoint := range data {
-			ch <- prometheus.MustNewConstMetric(ApiStatus, prometheus.GaugeValue, 1, endpoint)
+			ch <- prometheus.MustNewConstMetric(ApiStatus, prometheus.GaugeValue, 1, endpoint.(string))
 		}
 		return nil
 	}
@@ -313,26 +341,26 @@ func (e *Exporter) extractStatistics(ch chan<- prometheus.Metric) {
 		if apiResponse.Code != 0 {
 			return fmt.Errorf("API response code is not 0: %d", apiResponse.Code)
 		}
-		data, ok := apiResponse.Data.(map[string]float64)
+		data, ok := apiResponse.Data.(map[string]interface{})
 		if !ok {
 			return fmt.Errorf("API response data is not a float64 map")
 		}
-		ch <- prometheus.MustNewConstMetric(StatisticsBuffer, prometheus.GaugeValue, data["buffer"])
-		ch <- prometheus.MustNewConstMetric(StatisticsBufferLikeString, prometheus.GaugeValue, data["bufferLikeString"])
-		ch <- prometheus.MustNewConstMetric(StatisticsBufferList, prometheus.GaugeValue, data["bufferList"])
-		ch <- prometheus.MustNewConstMetric(StatisticsBufferRaw, prometheus.GaugeValue, data["bufferRaw"])
-		ch <- prometheus.MustNewConstMetric(StatisticsFrame, prometheus.GaugeValue, data["frame"])
-		ch <- prometheus.MustNewConstMetric(StatisticsFrameImp, prometheus.GaugeValue, data["frameImp"])
-		ch <- prometheus.MustNewConstMetric(StatisticsMediaSource, prometheus.GaugeValue, data["mediaSource"])
-		ch <- prometheus.MustNewConstMetric(StatisticsMultiMediaSourceMuxer, prometheus.GaugeValue, data["multiMediaSourceMuxer"])
-		ch <- prometheus.MustNewConstMetric(StatisticsRtmpPacket, prometheus.GaugeValue, data["rtmpPacket"])
-		ch <- prometheus.MustNewConstMetric(StatisticsRtpPacket, prometheus.GaugeValue, data["rtpPacket"])
-		ch <- prometheus.MustNewConstMetric(StatisticsSocket, prometheus.GaugeValue, data["socket"])
-		ch <- prometheus.MustNewConstMetric(StatisticsTcpClient, prometheus.GaugeValue, data["tcpClient"])
-		ch <- prometheus.MustNewConstMetric(StatisticsTcpServer, prometheus.GaugeValue, data["tcpServer"])
-		ch <- prometheus.MustNewConstMetric(StatisticsTcpSession, prometheus.GaugeValue, data["tcpSession"])
-		ch <- prometheus.MustNewConstMetric(StatisticsUdpServer, prometheus.GaugeValue, data["udpServer"])
-		ch <- prometheus.MustNewConstMetric(StatisticsUdpSession, prometheus.GaugeValue, data["udpSession"])
+		ch <- prometheus.MustNewConstMetric(StatisticsBuffer, prometheus.GaugeValue, data["Buffer"].(float64))
+		ch <- prometheus.MustNewConstMetric(StatisticsBufferLikeString, prometheus.GaugeValue, data["BufferLikeString"].(float64))
+		ch <- prometheus.MustNewConstMetric(StatisticsBufferList, prometheus.GaugeValue, data["BufferList"].(float64))
+		ch <- prometheus.MustNewConstMetric(StatisticsBufferRaw, prometheus.GaugeValue, data["BufferRaw"].(float64))
+		ch <- prometheus.MustNewConstMetric(StatisticsFrame, prometheus.GaugeValue, data["Frame"].(float64))
+		ch <- prometheus.MustNewConstMetric(StatisticsFrameImp, prometheus.GaugeValue, data["FrameImp"].(float64))
+		ch <- prometheus.MustNewConstMetric(StatisticsMediaSource, prometheus.GaugeValue, data["MediaSource"].(float64))
+		ch <- prometheus.MustNewConstMetric(StatisticsMultiMediaSourceMuxer, prometheus.GaugeValue, data["MultiMediaSourceMuxer"].(float64))
+		ch <- prometheus.MustNewConstMetric(StatisticsRtmpPacket, prometheus.GaugeValue, data["RtmpPacket"].(float64))
+		ch <- prometheus.MustNewConstMetric(StatisticsRtpPacket, prometheus.GaugeValue, data["RtpPacket"].(float64))
+		ch <- prometheus.MustNewConstMetric(StatisticsSocket, prometheus.GaugeValue, data["Socket"].(float64))
+		ch <- prometheus.MustNewConstMetric(StatisticsTcpClient, prometheus.GaugeValue, data["TcpClient"].(float64))
+		ch <- prometheus.MustNewConstMetric(StatisticsTcpServer, prometheus.GaugeValue, data["TcpServer"].(float64))
+		ch <- prometheus.MustNewConstMetric(StatisticsTcpSession, prometheus.GaugeValue, data["TcpSession"].(float64))
+		ch <- prometheus.MustNewConstMetric(StatisticsUdpServer, prometheus.GaugeValue, data["UdpServer"].(float64))
+		ch <- prometheus.MustNewConstMetric(StatisticsUdpSession, prometheus.GaugeValue, data["UdpSession"].(float64))
 		return nil
 	}
 	e.fetchHTTP(ch, "http://127.0.0.1/index/api/getStatistic", processFunc)
@@ -422,7 +450,7 @@ func main() {
 	level.Info(logger).Log("msg", "Starting zlm_exporter", "version", version.Info())
 	level.Info(logger).Log("msg", "Build context", "context", version.BuildContext())
 
-	exporter, err := NewExporter(logger, Options{})
+	exporter, err := NewExporter(logger)
 	if err != nil {
 		level.Error(logger).Log("msg", "Error creating exporter", "err", err)
 		return
