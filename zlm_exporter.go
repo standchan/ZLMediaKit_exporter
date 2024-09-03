@@ -96,8 +96,8 @@ var (
 )
 
 type Exporter struct {
-	client http.Client
-
+	client        http.Client
+	apiHost       string
 	mutex         sync.RWMutex
 	up            prometheus.Gauge
 	totalScrapes  prometheus.Counter
@@ -109,7 +109,6 @@ type Exporter struct {
 
 type Options struct {
 	Namespace  string
-	apiHost    string
 	Registry   *prometheus.Registry
 	BuildInfo  BuildInfo
 	CaCertFile string
@@ -133,7 +132,8 @@ func NewExporter(logger log.Logger, opts ...OptionFunc) (*Exporter, error) {
 			Name:      "exporter_scrapes_total",
 			Help:      "Current total ZLMediaKit scrapes.",
 		}),
-		logger: logger,
+		logger:  logger,
+		apiHost: "http://127.0.0.1",
 	}
 	for _, opt := range opts {
 		opt(exporter)
@@ -165,6 +165,12 @@ func WithBuildInfo(buildInfo BuildInfo) OptionFunc {
 func WithCaCertFile(caCertFile string) OptionFunc {
 	return func(e *Exporter) {
 		e.option.CaCertFile = caCertFile
+	}
+}
+
+func WithAPIHost(apiHost string) OptionFunc {
+	return func(e *Exporter) {
+		e.apiHost = apiHost
 	}
 }
 
@@ -204,7 +210,8 @@ type APIResponse struct {
 func (e *Exporter) fetchHTTP(ch chan<- prometheus.Metric, endpoint string, processFunc func(closer io.ReadCloser) error) {
 	header := http.Header{}
 	header.Add("secret", ZLMSecret)
-	parsedURL, err := url.Parse(endpoint)
+	uri := fmt.Sprintf("%s/%s", e.apiHost, endpoint)
+	parsedURL, err := url.Parse(uri)
 	if err != nil {
 		level.Error(e.logger).Log("msg", "Error parsing URL", "err", err)
 		return
@@ -244,9 +251,8 @@ func (e *Exporter) extractZLMVersion(ch chan<- prometheus.Metric) {
 		ch <- prometheus.MustNewConstMetric(ZLMediaKitInfo, prometheus.GaugeValue, 1, data["branchName"].(string), data["buildTime"].(string), data["commitHash"].(string))
 		return nil
 	}
-	e.fetchHTTP(ch, "http://127.0.0.1/index/api/version", fetchFunc)
+	e.fetchHTTP(ch, "index/api/version", fetchFunc)
 }
-
 func (e *Exporter) extractAPIStatus(ch chan<- prometheus.Metric) {
 	processFunc := func(body io.ReadCloser) error {
 		var apiResponse APIResponse
@@ -268,7 +274,7 @@ func (e *Exporter) extractAPIStatus(ch chan<- prometheus.Metric) {
 		}
 		return nil
 	}
-	e.fetchHTTP(ch, "http://127.0.0.1/index/api/getApiList", processFunc)
+	e.fetchHTTP(ch, "index/api/getApiList", processFunc)
 }
 func (e *Exporter) extractNetworkThreads(ch chan<- prometheus.Metric) {
 	processFunc := func(body io.ReadCloser) error {
@@ -299,7 +305,7 @@ func (e *Exporter) extractNetworkThreads(ch chan<- prometheus.Metric) {
 		ch <- prometheus.MustNewConstMetric(ThreadsDelayTotal, prometheus.GaugeValue, delayTotal)
 		return nil
 	}
-	e.fetchHTTP(ch, "http://127.0.0.1/index/api/getThreadsLoad", processFunc)
+	e.fetchHTTP(ch, "index/api/getThreadsLoad", processFunc)
 }
 func (e *Exporter) extractWorkThreads(ch chan<- prometheus.Metric) {
 	processFunc := func(body io.ReadCloser) error {
@@ -330,7 +336,7 @@ func (e *Exporter) extractWorkThreads(ch chan<- prometheus.Metric) {
 		ch <- prometheus.MustNewConstMetric(WorkThreadsDelayTotal, prometheus.GaugeValue, delayTotal)
 		return nil
 	}
-	e.fetchHTTP(ch, "http://127.0.0.1/index/api/getWorkThreadsLoad", processFunc)
+	e.fetchHTTP(ch, "index/api/getWorkThreadsLoad", processFunc)
 }
 func (e *Exporter) extractStatistics(ch chan<- prometheus.Metric) {
 	processFunc := func(body io.ReadCloser) error {
@@ -363,7 +369,7 @@ func (e *Exporter) extractStatistics(ch chan<- prometheus.Metric) {
 		ch <- prometheus.MustNewConstMetric(StatisticsUdpSession, prometheus.GaugeValue, data["UdpSession"].(float64))
 		return nil
 	}
-	e.fetchHTTP(ch, "http://127.0.0.1/index/api/getStatistic", processFunc)
+	e.fetchHTTP(ch, "index/api/getStatistic", processFunc)
 }
 func (e *Exporter) extractServerConfig(ch chan<- prometheus.Metric) {
 	processFunc := func(body io.ReadCloser) error {
@@ -401,7 +407,7 @@ func (e *Exporter) extractServerConfig(ch chan<- prometheus.Metric) {
 
 		return nil
 	}
-	e.fetchHTTP(ch, "http://127.0.0.1/index/api/getServerConfig", processFunc)
+	e.fetchHTTP(ch, "index/api/getServerConfig", processFunc)
 }
 func (e *Exporter) extractSession(ch chan<- prometheus.Metric) {
 	processFunc := func(body io.ReadCloser) error {
@@ -428,7 +434,7 @@ func (e *Exporter) extractSession(ch chan<- prometheus.Metric) {
 		}
 		return nil
 	}
-	e.fetchHTTP(ch, "http://127.0.0.1/index/api/getAllSession", processFunc)
+	e.fetchHTTP(ch, "index/api/getAllSession", processFunc)
 
 }
 
