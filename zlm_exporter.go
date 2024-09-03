@@ -175,6 +175,7 @@ func WithAPIHost(apiHost string) OptionFunc {
 }
 
 func (e *Exporter) Describe(ch chan<- *prometheus.Desc) {
+	// todo:需要发送所有指标desc
 	for _, m := range e.serverMetrics {
 		ch <- m.Desc
 	}
