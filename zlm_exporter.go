@@ -28,10 +28,6 @@ const (
 	namespace = "zlmediakit"
 )
 
-var (
-	serverLabelNames = []string{"backend", "server"}
-)
-
 type metricInfo struct {
 	Desc *prometheus.Desc
 	Type prometheus.ValueType
@@ -108,6 +104,7 @@ type Exporter struct {
 }
 
 type Options struct {
+	ScrapeURI  string
 	Namespace  string
 	Registry   *prometheus.Registry
 	BuildInfo  BuildInfo
@@ -120,7 +117,7 @@ type BuildInfo struct {
 	Date      string
 }
 
-func NewExporter(logger log.Logger, opts ...OptionFunc) (*Exporter, error) {
+func NewExporter(logger log.Logger, option Options) (*Exporter, error) {
 	exporter := &Exporter{
 		up: prometheus.NewGauge(prometheus.GaugeOpts{
 			Namespace: namespace,
@@ -134,44 +131,10 @@ func NewExporter(logger log.Logger, opts ...OptionFunc) (*Exporter, error) {
 		}),
 		logger:  logger,
 		apiHost: "http://127.0.0.1",
-	}
-	for _, opt := range opts {
-		opt(exporter)
+		option:  option,
 	}
 
 	return exporter, nil
-}
-
-type OptionFunc func(exporter *Exporter)
-
-func WithNamespace(namespace string) OptionFunc {
-	return func(e *Exporter) {
-		e.option.Namespace = namespace
-	}
-}
-
-func WithRegistry(registry *prometheus.Registry) OptionFunc {
-	return func(e *Exporter) {
-		e.option.Registry = registry
-	}
-}
-
-func WithBuildInfo(buildInfo BuildInfo) OptionFunc {
-	return func(e *Exporter) {
-		e.option.BuildInfo = buildInfo
-	}
-}
-
-func WithCaCertFile(caCertFile string) OptionFunc {
-	return func(e *Exporter) {
-		e.option.CaCertFile = caCertFile
-	}
-}
-
-func WithAPIHost(apiHost string) OptionFunc {
-	return func(e *Exporter) {
-		e.apiHost = apiHost
-	}
 }
 
 func (e *Exporter) Describe(ch chan<- *prometheus.Desc) {
@@ -443,8 +406,9 @@ func (e *Exporter) extractSession(ch chan<- prometheus.Metric) {
 // 1.metric must use base units
 func main() {
 	var (
-		webConfig   = webflag.AddFlags(kingpin.CommandLine, ":9101")
-		metricsPath = kingpin.Flag("web.telemetry-path", "Path under which to expose metrics.").Default("/metrics").String()
+		webConfig    = webflag.AddFlags(kingpin.CommandLine, ":9101")
+		metricsPath  = kingpin.Flag("web.telemetry-path", "Path under which to expose metrics.").Default("/metrics").String()
+		zlmScrapeURI = kingpin.Flag("haproxy.scrape-uri", "URI on which to scrape zlmediakit.").Default("http://localhost/").String()
 	)
 
 	promlogConfig := &promlog.Config{}
@@ -456,8 +420,10 @@ func main() {
 
 	level.Info(logger).Log("msg", "Starting zlm_exporter", "version", version.Info())
 	level.Info(logger).Log("msg", "Build context", "context", version.BuildContext())
-
-	exporter, err := NewExporter(logger)
+	option := Options{
+		ScrapeURI: *zlmScrapeURI,
+	}
+	exporter, err := NewExporter(logger, option)
 	if err != nil {
 		level.Error(logger).Log("msg", "Error creating exporter", "err", err)
 		return
