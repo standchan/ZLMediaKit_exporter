@@ -4,8 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/alecthomas/kingpin/v2"
-	"github.com/go-kit/log"
-	"github.com/go-kit/log/level"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/prometheus/common/promlog"
@@ -13,6 +11,7 @@ import (
 	"github.com/prometheus/common/version"
 	"github.com/prometheus/exporter-toolkit/web"
 	webflag "github.com/prometheus/exporter-toolkit/web/kingpinflag"
+	"github.com/sirupsen/logrus"
 	"io"
 	"net/http"
 	"net/url"
@@ -92,22 +91,23 @@ var (
 )
 
 type Exporter struct {
-	client        http.Client
-	apiHost       string
-	mutex         sync.RWMutex
+	URI    string
+	client http.Client
+	mutex  sync.RWMutex
+
 	up            prometheus.Gauge
 	totalScrapes  prometheus.Counter
 	serverMetrics map[int]metricInfo
-	logger        log.Logger
-	option        Options
+	logger        *logrus.Logger
+	options       Options
 	mux           *http.ServeMux
+
+	buildInfo BuildInfo
 }
 
 type Options struct {
 	ScrapeURI  string
-	Namespace  string
-	Registry   *prometheus.Registry
-	BuildInfo  BuildInfo
+	SSLVerify  bool
 	CaCertFile string
 }
 
@@ -117,8 +117,9 @@ type BuildInfo struct {
 	Date      string
 }
 
-func NewExporter(logger log.Logger, option Options) (*Exporter, error) {
+func NewExporter(logger *logrus.Logger, options Options) (*Exporter, error) {
 	exporter := &Exporter{
+		URI: options.ScrapeURI,
 		up: prometheus.NewGauge(prometheus.GaugeOpts{
 			Namespace: namespace,
 			Name:      "up",
@@ -130,8 +131,7 @@ func NewExporter(logger log.Logger, option Options) (*Exporter, error) {
 			Help:      "Current total ZLMediaKit scrapes.",
 		}),
 		logger:  logger,
-		apiHost: "http://127.0.0.1",
-		option:  option,
+		options: options,
 	}
 
 	return exporter, nil
@@ -174,10 +174,10 @@ type APIResponse struct {
 func (e *Exporter) fetchHTTP(ch chan<- prometheus.Metric, endpoint string, processFunc func(closer io.ReadCloser) error) {
 	header := http.Header{}
 	header.Add("secret", ZLMSecret)
-	uri := fmt.Sprintf("%s/%s", e.apiHost, endpoint)
+	uri := fmt.Sprintf("%s/%s", e.URI, endpoint)
 	parsedURL, err := url.Parse(uri)
 	if err != nil {
-		level.Error(e.logger).Log("msg", "Error parsing URL", "err", err)
+		e.logger.Println("msg", "Error parsing URL", "err", err)
 		return
 	}
 
@@ -189,13 +189,13 @@ func (e *Exporter) fetchHTTP(ch chan<- prometheus.Metric, endpoint string, proce
 
 	res, err := e.client.Do(req)
 	if err != nil {
-		level.Error(e.logger).Log("msg", "Error scraping ZLMediaKit", "err", err)
+		e.logger.Println("msg", "Error scraping ZLMediaKit", "err", err)
 		return
 	}
 	defer res.Body.Close()
 
 	if err = processFunc(res.Body); err != nil {
-		level.Error(e.logger).Log("msg", "Error processing response", "err", err)
+		e.logger.Println("msg", "Error processing response", "err", err)
 	}
 }
 
@@ -408,7 +408,9 @@ func main() {
 	var (
 		webConfig    = webflag.AddFlags(kingpin.CommandLine, ":9101")
 		metricsPath  = kingpin.Flag("web.telemetry-path", "Path under which to expose metrics.").Default("/metrics").String()
-		zlmScrapeURI = kingpin.Flag("haproxy.scrape-uri", "URI on which to scrape zlmediakit.").Default("http://localhost/").String()
+		zlmScrapeURI = kingpin.Flag("zlm.scrape-uri", "URI on which to scrape zlmediakit.").Default("http://localhost/").String()
+		zlmSSLVerify = kingpin.Flag("zlm.ssl-verify", "Flag that enables SSL certificate verification for the scrape URI").Default("true").Bool()
+		logFormat    = kingpin.Flag("log-format", "Log format, valid options are txt and json").Default("").String()
 	)
 
 	promlogConfig := &promlog.Config{}
@@ -416,17 +418,28 @@ func main() {
 	kingpin.Version(version.Print("zlm_exporter"))
 	kingpin.HelpFlag.Short('h')
 	kingpin.Parse()
-	logger := promlog.New(promlogConfig)
 
-	level.Info(logger).Log("msg", "Starting zlm_exporter", "version", version.Info())
-	level.Info(logger).Log("msg", "Build context", "context", version.BuildContext())
+	log := logrus.New()
+
+	switch *logFormat {
+	case "json":
+		log.SetFormatter(&logrus.JSONFormatter{})
+	default:
+		log.SetFormatter(&logrus.TextFormatter{})
+	}
+	log.SetLevel(logrus.InfoLevel)
+	log.Println("msg", "Starting zlm_exporter", "version", version.Info())
+	log.Println("msg", "Build context", "context", version.BuildContext())
+
 	option := Options{
 		ScrapeURI: *zlmScrapeURI,
+		SSLVerify: *zlmSSLVerify,
 	}
-	exporter, err := NewExporter(logger, option)
+
+	exporter, err := NewExporter(log, option)
 	if err != nil {
-		level.Error(logger).Log("msg", "Error creating exporter", "err", err)
-		return
+		log.Println("msg", "Error creating exporter", "err", err)
+		os.Exit(1)
 	}
 	prometheus.MustRegister(exporter)
 
@@ -442,8 +455,8 @@ func main() {
              </html>`))
 	})
 	srv := &http.Server{}
-	if err := web.ListenAndServe(srv, webConfig, logger); err != nil {
-		level.Error(logger).Log("msg", "Error starting HTTP server", "err", err)
+	if err := web.ListenAndServe(srv, webConfig, promlog.New(promlogConfig)); err != nil {
+		log.Error("msg", "Error starting HTTP server", "err", err)
 		os.Exit(1)
 	}
 
