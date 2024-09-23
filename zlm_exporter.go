@@ -27,6 +27,15 @@ const (
 	namespace = "zlmediakit"
 )
 
+var (
+	/*
+		BuildVersion, BuildDate, BuildCommitSha are filled in by the build script
+	*/
+	BuildVersion   = "<<< filled in by build >>>"
+	BuildDate      = "<<< filled in by build >>>"
+	BuildCommitSha = "<<< filled in by build >>>"
+)
+
 type metricInfo struct {
 	Desc *prometheus.Desc
 	Type prometheus.ValueType
@@ -100,7 +109,6 @@ type Exporter struct {
 	serverMetrics map[int]metricInfo
 	logger        *logrus.Logger
 	options       Options
-	mux           *http.ServeMux
 
 	buildInfo BuildInfo
 }
@@ -130,7 +138,12 @@ func NewExporter(logger *logrus.Logger, options Options) (*Exporter, error) {
 			Name:      "exporter_scrapes_total",
 			Help:      "Current total ZLMediaKit scrapes.",
 		}),
-		logger:  logger,
+		logger: logger,
+		buildInfo: BuildInfo{
+			Version:   BuildVersion,
+			CommitSha: BuildCommitSha,
+			Date:      BuildDate,
+		},
 		options: options,
 	}
 
@@ -445,15 +458,6 @@ func main() {
 
 	//prometheus.MustRegister(version.NewCollector("zlm_exporter"))
 	http.Handle(*metricsPath, promhttp.Handler())
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`<html>
-             <head><title>ZLMediaKit Exporter</title></head>
-             <body>
-             <h1>Haproxy Exporter</h1>
-             <p><a href='` + *metricsPath + `'>Metrics</a></p>
-             </body>
-             </html>`))
-	})
 	srv := &http.Server{}
 	if err := web.ListenAndServe(srv, webConfig, promlog.New(promlogConfig)); err != nil {
 		log.Error("msg", "Error starting HTTP server", "err", err)

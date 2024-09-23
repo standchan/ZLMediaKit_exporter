@@ -20,8 +20,7 @@ fmt:
 	$(GOFMT) -d -s -w $(FMT_DIRS)
 
 lint:
-	$(GOCI) run --timeout=10m --skip-dirs=gen
-	oapi-codegen -o /dev/null $(OAPI_SPEC)
+	$(GOCI) run --timeout=10m
 
 lintfix:
 	$(GOCI) run --skip-dirs=gen --fix
