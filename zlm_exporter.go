@@ -97,6 +97,13 @@ var (
 
 	// session 相关指标
 	Session = prometheus.NewDesc(prometheus.BuildFQName(namespace, "session", "session_info"), "Session info", []string{"id", "identifier", "local_ip", "local_port", "peer_ip", "peer_port", "typeid"}, nil)
+
+	// stream 相关指标
+	StreamTotal = prometheus.NewDesc(prometheus.BuildFQName(namespace, "stream", "total"), "Total number of streams", []string{}, nil)
+	StreamInfo  = prometheus.NewDesc(prometheus.BuildFQName(namespace, "stream", "info"), "Stream info", []string{"app", "id", "totalReaderCount", "vhost"}, nil)
+
+	// media 相关指标
+	MediaPlayer = prometheus.NewDesc(prometheus.BuildFQName(namespace, "media", "player"), "Media player list", []string{"identifier", "local_ip", "local_port", "peer_ip", "peer_port", "typeid"}, nil)
 )
 
 type Exporter struct {
@@ -413,6 +420,58 @@ func (e *Exporter) extractSession(ch chan<- prometheus.Metric) {
 	}
 	e.fetchHTTP(ch, "index/api/getAllSession", processFunc)
 
+}
+func (e *Exporter) extractStream(ch chan<- prometheus.Metric) {
+	processFunc := func(body io.ReadCloser) error {
+		type APIResponse struct {
+			Code int                      `json:"code"`
+			Data []map[string]interface{} `json:"Data"`
+		}
+		var apiResponse APIResponse
+		if err := json.NewDecoder(body).Decode(&apiResponse); err != nil {
+			return fmt.Errorf("error decoding JSON response: %w", err)
+		}
+		if apiResponse.Code != 0 {
+			return fmt.Errorf("API response code is not 0: %d", apiResponse.Code)
+		}
+		for i, v := range apiResponse.Data {
+			app := fmt.Sprint(v["app"])
+			id := fmt.Sprint(v["id"])
+			totalReaderCount := fmt.Sprint(v["totalReaderCount"])
+			vhost := fmt.Sprint(v["vhost"])
+			ch <- prometheus.MustNewConstMetric(StreamInfo, prometheus.GaugeValue, float64(i), app, id, totalReaderCount, vhost)
+		}
+		ch <- prometheus.MustNewConstMetric(StreamTotal, prometheus.GaugeValue, float64(len(apiResponse.Data)))
+		return nil
+	}
+	e.fetchHTTP(ch, "index/api/getMediaList", processFunc)
+
+}
+func (e *Exporter) extractMedia(ch chan<- prometheus.Metric) {
+	processFunc := func(body io.ReadCloser) error {
+		type APIResponse struct {
+			Code int                      `json:"code"`
+			Data []map[string]interface{} `json:"Data"`
+		}
+		var apiResponse APIResponse
+		if err := json.NewDecoder(body).Decode(&apiResponse); err != nil {
+			return fmt.Errorf("error decoding JSON response: %w", err)
+		}
+		if apiResponse.Code != 0 {
+			return fmt.Errorf("API response code is not 0: %d", apiResponse.Code)
+		}
+		for i, v := range apiResponse.Data {
+			identifier := fmt.Sprint(v["identifier"])
+			localIP := fmt.Sprint(v["local_ip"])
+			localPort := fmt.Sprint(v["local_port"])
+			peerIp := fmt.Sprint(v["peer_ip"])
+			peerPort := fmt.Sprint(v["peer_port"])
+			typeid := fmt.Sprint(v["typeid"])
+			ch <- prometheus.MustNewConstMetric(MediaPlayer, prometheus.GaugeValue, float64(i), identifier, localIP, localPort, peerIp, peerPort, typeid)
+		}
+		return nil
+	}
+	e.fetchHTTP(ch, "index/api/getMediaList", processFunc)
 }
 
 // doc: https://prometheus.io/docs/instrumenting/writing_exporters/
