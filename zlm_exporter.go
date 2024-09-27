@@ -104,6 +104,10 @@ var (
 
 	// media 相关指标
 	MediaPlayer = prometheus.NewDesc(prometheus.BuildFQName(namespace, "media", "player"), "Media player list", []string{"identifier", "local_ip", "local_port", "peer_ip", "peer_port", "typeid"}, nil)
+
+	// rtp 相关指标
+	RtpServer      = prometheus.NewDesc(prometheus.BuildFQName(namespace, "rtp", "server"), "RTP server list", []string{"port", "stream_id"}, nil)
+	RtpServerTotal = prometheus.NewDesc(prometheus.BuildFQName(namespace, "rtp", "server_total"), "Total number of RTP servers", []string{}, nil)
 )
 
 type Exporter struct {
@@ -472,6 +476,30 @@ func (e *Exporter) extractMedia(ch chan<- prometheus.Metric) {
 		return nil
 	}
 	e.fetchHTTP(ch, "index/api/getMediaList", processFunc)
+}
+
+func (e *Exporter) extractRtp(ch chan<- prometheus.Metric) {
+	processFunc := func(body io.ReadCloser) error {
+		type APIResponse struct {
+			Code int                      `json:"code"`
+			Data []map[string]interface{} `json:"Data"`
+		}
+		var apiResponse APIResponse
+		if err := json.NewDecoder(body).Decode(&apiResponse); err != nil {
+			return fmt.Errorf("error decoding JSON response: %w", err)
+		}
+		if apiResponse.Code != 0 {
+			return fmt.Errorf("API response code is not 0: %d", apiResponse.Code)
+		}
+		for i, v := range apiResponse.Data {
+			port := fmt.Sprint(v["port"])
+			streamID := fmt.Sprint(v["stream_id"])
+			ch <- prometheus.MustNewConstMetric(RtpServer, prometheus.GaugeValue, float64(i), port, streamID)
+		}
+		ch <- prometheus.MustNewConstMetric(RtpServerTotal, prometheus.GaugeValue, float64(len(apiResponse.Data)))
+		return nil
+	}
+	e.fetchHTTP(ch, "index/api/listRtpServer", processFunc)
 }
 
 // doc: https://prometheus.io/docs/instrumenting/writing_exporters/
