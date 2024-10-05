@@ -187,12 +187,24 @@ func (e *Exporter) scrape(ch chan<- prometheus.Metric) (up float64) {
 	e.extractStatistics(ch)
 	e.extractServerConfig(ch)
 	e.extractSession(ch)
+	e.extractStream(ch)
+	e.extractMedia(ch)
+	e.extractRtp(ch)
 	return 1
 }
 
-type APIResponse struct {
-	Code int         `json:"code"`
-	Data interface{} `json:"Data"`
+type APIResponseDataNetworkThreads []struct {
+	Load  float64 `json:"load"`
+	Delay float64 `json:"delay"`
+}
+
+type APIResponseData interface {
+	[]struct{} | map[string]interface{} | []map[string]string | []map[string]interface{} | []string | APIResponseDataNetworkThreads
+}
+
+type APIResponseGeneric[T APIResponseData] struct {
+	Code int `json:"code"`
+	Data T   `json:"data"`
 }
 
 func (e *Exporter) fetchHTTP(ch chan<- prometheus.Metric, endpoint string, processFunc func(closer io.ReadCloser) error) {
@@ -225,17 +237,14 @@ func (e *Exporter) fetchHTTP(ch chan<- prometheus.Metric, endpoint string, proce
 
 func (e *Exporter) extractZLMVersion(ch chan<- prometheus.Metric) {
 	fetchFunc := func(body io.ReadCloser) error {
-		var apiResponse APIResponse
+		var apiResponse APIResponseGeneric[map[string]interface{}]
 		if err := json.NewDecoder(body).Decode(&apiResponse); err != nil {
 			return fmt.Errorf("error decoding JSON response: %w", err)
 		}
 		if apiResponse.Code != 0 {
 			return fmt.Errorf("API response code is not 0: %d", apiResponse.Code)
 		}
-		data, ok := apiResponse.Data.(map[string]interface{})
-		if !ok {
-			return fmt.Errorf("API response data is not a string map")
-		}
+		data := apiResponse.Data
 		ch <- prometheus.MustNewConstMetric(ZLMediaKitInfo, prometheus.GaugeValue, 1, data["branchName"].(string), data["buildTime"].(string), data["commitHash"].(string))
 		return nil
 	}
@@ -243,7 +252,7 @@ func (e *Exporter) extractZLMVersion(ch chan<- prometheus.Metric) {
 }
 func (e *Exporter) extractAPIStatus(ch chan<- prometheus.Metric) {
 	processFunc := func(body io.ReadCloser) error {
-		var apiResponse APIResponse
+		var apiResponse APIResponseGeneric[[]string]
 
 		if err := json.NewDecoder(body).Decode(&apiResponse); err != nil {
 			return fmt.Errorf("error decoding JSON response: %w", err)
@@ -252,13 +261,10 @@ func (e *Exporter) extractAPIStatus(ch chan<- prometheus.Metric) {
 			return fmt.Errorf("API response code is not 0: %d", apiResponse.Code)
 		}
 
-		data, ok := apiResponse.Data.([]interface{})
-		if !ok {
-			return fmt.Errorf("API response data is not a string array")
-		}
+		data := apiResponse.Data
 
 		for _, endpoint := range data {
-			ch <- prometheus.MustNewConstMetric(ApiStatus, prometheus.GaugeValue, 1, endpoint.(string))
+			ch <- prometheus.MustNewConstMetric(ApiStatus, prometheus.GaugeValue, 1, endpoint)
 		}
 		return nil
 	}
@@ -266,14 +272,7 @@ func (e *Exporter) extractAPIStatus(ch chan<- prometheus.Metric) {
 }
 func (e *Exporter) extractNetworkThreads(ch chan<- prometheus.Metric) {
 	processFunc := func(body io.ReadCloser) error {
-		type ThreadsLoad struct {
-			Code int `json:"code"`
-			Data []struct {
-				Load  float64 `json:"load"`
-				Delay float64 `json:"delay"`
-			}
-		}
-		var threadsLoad ThreadsLoad
+		var threadsLoad APIResponseGeneric[APIResponseDataNetworkThreads]
 		if err := json.NewDecoder(body).Decode(&threadsLoad); err != nil {
 			return fmt.Errorf("error decoding JSON response: %w", err)
 		}
@@ -295,6 +294,7 @@ func (e *Exporter) extractNetworkThreads(ch chan<- prometheus.Metric) {
 	}
 	e.fetchHTTP(ch, "index/api/getThreadsLoad", processFunc)
 }
+
 func (e *Exporter) extractWorkThreads(ch chan<- prometheus.Metric) {
 	processFunc := func(body io.ReadCloser) error {
 		type ThreadsLoad struct {
@@ -328,17 +328,14 @@ func (e *Exporter) extractWorkThreads(ch chan<- prometheus.Metric) {
 }
 func (e *Exporter) extractStatistics(ch chan<- prometheus.Metric) {
 	processFunc := func(body io.ReadCloser) error {
-		var apiResponse APIResponse
+		var apiResponse APIResponseGeneric[map[string]interface{}]
 		if err := json.NewDecoder(body).Decode(&apiResponse); err != nil {
 			return fmt.Errorf("error decoding JSON response: %w", err)
 		}
 		if apiResponse.Code != 0 {
 			return fmt.Errorf("API response code is not 0: %d", apiResponse.Code)
 		}
-		data, ok := apiResponse.Data.(map[string]interface{})
-		if !ok {
-			return fmt.Errorf("API response data is not a float64 map")
-		}
+		data := apiResponse.Data
 		ch <- prometheus.MustNewConstMetric(StatisticsBuffer, prometheus.GaugeValue, data["Buffer"].(float64))
 		ch <- prometheus.MustNewConstMetric(StatisticsBufferLikeString, prometheus.GaugeValue, data["BufferLikeString"].(float64))
 		ch <- prometheus.MustNewConstMetric(StatisticsBufferList, prometheus.GaugeValue, data["BufferList"].(float64))
@@ -361,11 +358,7 @@ func (e *Exporter) extractStatistics(ch chan<- prometheus.Metric) {
 }
 func (e *Exporter) extractServerConfig(ch chan<- prometheus.Metric) {
 	processFunc := func(body io.ReadCloser) error {
-		type APIResponse struct {
-			Code int                 `json:"code"`
-			Data []map[string]string `json:"Data"`
-		}
-		var apiResponse APIResponse
+		var apiResponse APIResponseGeneric[[]map[string]string]
 		if err := json.NewDecoder(body).Decode(&apiResponse); err != nil {
 			return fmt.Errorf("error decoding JSON response: %w", err)
 		}
@@ -399,11 +392,7 @@ func (e *Exporter) extractServerConfig(ch chan<- prometheus.Metric) {
 }
 func (e *Exporter) extractSession(ch chan<- prometheus.Metric) {
 	processFunc := func(body io.ReadCloser) error {
-		type APIResponse struct {
-			Code int                      `json:"code"`
-			Data []map[string]interface{} `json:"Data"`
-		}
-		var apiResponse APIResponse
+		var apiResponse APIResponseGeneric[[]map[string]interface{}]
 		if err := json.NewDecoder(body).Decode(&apiResponse); err != nil {
 			return fmt.Errorf("error decoding JSON response: %w", err)
 		}
@@ -427,11 +416,7 @@ func (e *Exporter) extractSession(ch chan<- prometheus.Metric) {
 }
 func (e *Exporter) extractStream(ch chan<- prometheus.Metric) {
 	processFunc := func(body io.ReadCloser) error {
-		type APIResponse struct {
-			Code int                      `json:"code"`
-			Data []map[string]interface{} `json:"Data"`
-		}
-		var apiResponse APIResponse
+		var apiResponse APIResponseGeneric[[]map[string]interface{}]
 		if err := json.NewDecoder(body).Decode(&apiResponse); err != nil {
 			return fmt.Errorf("error decoding JSON response: %w", err)
 		}
@@ -453,11 +438,7 @@ func (e *Exporter) extractStream(ch chan<- prometheus.Metric) {
 }
 func (e *Exporter) extractMedia(ch chan<- prometheus.Metric) {
 	processFunc := func(body io.ReadCloser) error {
-		type APIResponse struct {
-			Code int                      `json:"code"`
-			Data []map[string]interface{} `json:"Data"`
-		}
-		var apiResponse APIResponse
+		var apiResponse APIResponseGeneric[[]map[string]interface{}]
 		if err := json.NewDecoder(body).Decode(&apiResponse); err != nil {
 			return fmt.Errorf("error decoding JSON response: %w", err)
 		}
@@ -477,14 +458,9 @@ func (e *Exporter) extractMedia(ch chan<- prometheus.Metric) {
 	}
 	e.fetchHTTP(ch, "index/api/getMediaList", processFunc)
 }
-
 func (e *Exporter) extractRtp(ch chan<- prometheus.Metric) {
 	processFunc := func(body io.ReadCloser) error {
-		type APIResponse struct {
-			Code int                      `json:"code"`
-			Data []map[string]interface{} `json:"Data"`
-		}
-		var apiResponse APIResponse
+		var apiResponse APIResponseGeneric[[]map[string]interface{}]
 		if err := json.NewDecoder(body).Decode(&apiResponse); err != nil {
 			return fmt.Errorf("error decoding JSON response: %w", err)
 		}
@@ -508,7 +484,7 @@ func main() {
 	var (
 		webConfig    = webflag.AddFlags(kingpin.CommandLine, ":9101")
 		metricsPath  = kingpin.Flag("web.telemetry-path", "Path under which to expose metrics.").Default("/metrics").String()
-		zlmScrapeURI = kingpin.Flag("zlm.scrape-uri", "URI on which to scrape zlmediakit.").Default("http://localhost/").String()
+		zlmScrapeURI = kingpin.Flag("zlm.scrape-uri", "URI on which to scrape zlmediakit.").Default("http://localhost").String()
 		zlmSSLVerify = kingpin.Flag("zlm.ssl-verify", "Flag that enables SSL certificate verification for the scrape URI").Default("true").Bool()
 		logFormat    = kingpin.Flag("log-format", "Log format, valid options are txt and json").Default("").String()
 	)
