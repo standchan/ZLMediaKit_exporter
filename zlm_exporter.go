@@ -99,8 +99,9 @@ var (
 	Session = prometheus.NewDesc(prometheus.BuildFQName(namespace, "session", "session_info"), "Session info", []string{"id", "identifier", "local_ip", "local_port", "peer_ip", "peer_port", "typeid"}, nil)
 
 	// stream 相关指标
-	StreamTotal = prometheus.NewDesc(prometheus.BuildFQName(namespace, "stream", "total"), "Total number of streams", []string{}, nil)
-	StreamInfo  = prometheus.NewDesc(prometheus.BuildFQName(namespace, "stream", "info"), "Stream info", []string{"app", "id", "totalReaderCount", "vhost"}, nil)
+	StreamTotal       = prometheus.NewDesc(prometheus.BuildFQName(namespace, "stream", "total"), "Total number of streams", []string{}, nil)
+	StreamReaderCount = prometheus.NewDesc(prometheus.BuildFQName(namespace, "stream", "reader_count"), "Stream reader count", []string{"app", "id", "vhost", "originType"}, nil)
+	SteamBandwidth    = prometheus.NewDesc(prometheus.BuildFQName(namespace, "stream", "bandwidth"), "Stream bandwidth", []string{"app", "id", "vhost", "originType"}, nil)
 
 	// media 相关指标
 	MediaPlayer = prometheus.NewDesc(prometheus.BuildFQName(namespace, "media", "player"), "Media player list", []string{"identifier", "local_ip", "local_port", "peer_ip", "peer_port", "typeid"}, nil)
@@ -423,12 +424,23 @@ func (e *Exporter) extractStream(ch chan<- prometheus.Metric) {
 		if apiResponse.Code != 0 {
 			return fmt.Errorf("API response code is not 0: %d", apiResponse.Code)
 		}
-		for i, v := range apiResponse.Data {
+		for _, v := range apiResponse.Data {
 			app := fmt.Sprint(v["app"])
-			id := fmt.Sprint(v["id"])
-			totalReaderCount := fmt.Sprint(v["totalReaderCount"])
+			id := fmt.Sprint(v["stream"])
+			readerCount, ok := v["totalReaderCount"].(float64)
+			if !ok {
+				continue
+				// todo error handle
+			}
 			vhost := fmt.Sprint(v["vhost"])
-			ch <- prometheus.MustNewConstMetric(StreamInfo, prometheus.GaugeValue, float64(i), app, id, totalReaderCount, vhost)
+			originType := fmt.Sprint(v["originType"])
+			bytesSpeed, ok := v["bytesSpeed"].(float64)
+			if !ok {
+				continue
+				// todo error handle
+			}
+			ch <- prometheus.MustNewConstMetric(StreamReaderCount, prometheus.GaugeValue, readerCount, app, id, vhost, originType)
+			ch <- prometheus.MustNewConstMetric(SteamBandwidth, prometheus.GaugeValue, bytesSpeed, app, id, vhost, originType)
 		}
 		ch <- prometheus.MustNewConstMetric(StreamTotal, prometheus.GaugeValue, float64(len(apiResponse.Data)))
 		return nil
