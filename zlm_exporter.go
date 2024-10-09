@@ -243,7 +243,7 @@ func (e *Exporter) extractZLMVersion(ch chan<- prometheus.Metric) {
 			return fmt.Errorf("error decoding JSON response: %w", err)
 		}
 		if apiResponse.Code != 0 {
-			return fmt.Errorf("API response code is not 0: %d", apiResponse.Code)
+			return fmt.Errorf("unexpected API response code: %d", apiResponse.Code)
 		}
 		data := apiResponse.Data
 		ch <- prometheus.MustNewConstMetric(ZLMediaKitInfo, prometheus.GaugeValue, 1, data["branchName"].(string), data["buildTime"].(string), data["commitHash"].(string))
@@ -259,7 +259,7 @@ func (e *Exporter) extractAPIStatus(ch chan<- prometheus.Metric) {
 			return fmt.Errorf("error decoding JSON response: %w", err)
 		}
 		if apiResponse.Code != 0 {
-			return fmt.Errorf("API response code is not 0: %d", apiResponse.Code)
+			return fmt.Errorf("unexpected API response code: %d", apiResponse.Code)
 		}
 
 		data := apiResponse.Data
@@ -278,7 +278,7 @@ func (e *Exporter) extractNetworkThreads(ch chan<- prometheus.Metric) {
 			return fmt.Errorf("error decoding JSON response: %w", err)
 		}
 		if threadsLoad.Code != 0 {
-			return fmt.Errorf("API response code is not 0: %d", threadsLoad.Code)
+			return fmt.Errorf("unexpected API response code: %d", threadsLoad.Code)
 		}
 		loadTotal := float64(0)
 		delayTotal := float64(0)
@@ -310,7 +310,7 @@ func (e *Exporter) extractWorkThreads(ch chan<- prometheus.Metric) {
 			return fmt.Errorf("error decoding JSON response: %w", err)
 		}
 		if threadsLoad.Code != 0 {
-			return fmt.Errorf("API response code is not 0: %d", threadsLoad.Code)
+			return fmt.Errorf("unexpected API response code: %d", threadsLoad.Code)
 		}
 		loadTotal := float64(0)
 		delayTotal := float64(0)
@@ -334,7 +334,7 @@ func (e *Exporter) extractStatistics(ch chan<- prometheus.Metric) {
 			return fmt.Errorf("error decoding JSON response: %w", err)
 		}
 		if apiResponse.Code != 0 {
-			return fmt.Errorf("API response code is not 0: %d", apiResponse.Code)
+			return fmt.Errorf("unexpected API response code: %d", apiResponse.Code)
 		}
 		data := apiResponse.Data
 		ch <- prometheus.MustNewConstMetric(StatisticsBuffer, prometheus.GaugeValue, data["Buffer"].(float64))
@@ -364,7 +364,7 @@ func (e *Exporter) extractServerConfig(ch chan<- prometheus.Metric) {
 			return fmt.Errorf("error decoding JSON response: %w", err)
 		}
 		if apiResponse.Code != 0 {
-			return fmt.Errorf("API response code is not 0: %d", apiResponse.Code)
+			return fmt.Errorf("unexpected API response code: %d", apiResponse.Code)
 		}
 
 		for i, v := range apiResponse.Data {
@@ -398,7 +398,7 @@ func (e *Exporter) extractSession(ch chan<- prometheus.Metric) {
 			return fmt.Errorf("error decoding JSON response: %w", err)
 		}
 		if apiResponse.Code != 0 {
-			return fmt.Errorf("API response code is not 0: %d", apiResponse.Code)
+			return fmt.Errorf("unexpected API response code: %d", apiResponse.Code)
 		}
 		for i, v := range apiResponse.Data {
 			id := fmt.Sprint(v["id"])
@@ -422,7 +422,7 @@ func (e *Exporter) extractStream(ch chan<- prometheus.Metric) {
 			return fmt.Errorf("error decoding JSON response: %w", err)
 		}
 		if apiResponse.Code != 0 {
-			return fmt.Errorf("API response code is not 0: %d", apiResponse.Code)
+			return fmt.Errorf("unexpected API response code: %d", apiResponse.Code)
 		}
 		for _, v := range apiResponse.Data {
 			app := fmt.Sprint(v["app"])
@@ -455,7 +455,7 @@ func (e *Exporter) extractMedia(ch chan<- prometheus.Metric) {
 			return fmt.Errorf("error decoding JSON response: %w", err)
 		}
 		if apiResponse.Code != 0 {
-			return fmt.Errorf("API response code is not 0: %d", apiResponse.Code)
+			return fmt.Errorf("unexpected API response code: %d", apiResponse.Code)
 		}
 		for i, v := range apiResponse.Data {
 			identifier := fmt.Sprint(v["identifier"])
@@ -477,7 +477,7 @@ func (e *Exporter) extractRtp(ch chan<- prometheus.Metric) {
 			return fmt.Errorf("error decoding JSON response: %w", err)
 		}
 		if apiResponse.Code != 0 {
-			return fmt.Errorf("API response code is not 0: %d", apiResponse.Code)
+			return fmt.Errorf("unexpected API response code: %d", apiResponse.Code)
 		}
 		for i, v := range apiResponse.Data {
 			port := fmt.Sprint(v["port"])
