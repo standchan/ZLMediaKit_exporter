@@ -47,13 +47,11 @@ var (
 
 	// 网络线程相关指标
 	// todo Threads指标可能用constLabels更好？
-	Threads           = prometheus.NewDesc(prometheus.BuildFQName(namespace, "network", "threads"), "Network threads", []string{"load", "delay"}, nil)
-	ThreadsTotal      = prometheus.NewDesc(prometheus.BuildFQName(namespace, "network", "threads_total"), "Total number of network threads", []string{}, nil)
-	ThreadsLoadTotal  = prometheus.NewDesc(prometheus.BuildFQName(namespace, "network", "threads_load_total"), "Total of network threads load", []string{}, nil)
-	ThreadsDelayTotal = prometheus.NewDesc(prometheus.BuildFQName(namespace, "network", "threads_delay_total"), "Total of network threads delay", []string{}, nil)
+	NetworkThreadsTotal      = prometheus.NewDesc(prometheus.BuildFQName(namespace, "network", "threads_total"), "Total number of network threads", []string{}, nil)
+	NetworkThreadsLoadTotal  = prometheus.NewDesc(prometheus.BuildFQName(namespace, "network", "threads_load_total"), "Total of network threads load", []string{}, nil)
+	NetworkThreadsDelayTotal = prometheus.NewDesc(prometheus.BuildFQName(namespace, "network", "threads_delay_total"), "Total of network threads delay", []string{}, nil)
 
 	// 工作线程相关指标
-	WorkThreads           = prometheus.NewDesc(prometheus.BuildFQName(namespace, "work", "threads"), "Work threads", []string{"load", "delay"}, nil)
 	WorkThreadsTotal      = prometheus.NewDesc(prometheus.BuildFQName(namespace, "work", "threads_total"), "Total number of work threads", []string{}, nil)
 	WorkThreadsLoadTotal  = prometheus.NewDesc(prometheus.BuildFQName(namespace, "work", "threads_load_total"), "Total of work threads load", []string{}, nil)
 	WorkThreadsDelayTotal = prometheus.NewDesc(prometheus.BuildFQName(namespace, "work", "threads_delay_total"), "Total of work threads delay", []string{}, nil)
@@ -96,7 +94,8 @@ var (
 	ServerSrt       = prometheus.NewDesc(prometheus.BuildFQName(namespace, "server", "srt_info"), "Server config about srt", []string{"latencyMul", "pktBufSize", "port", "timeoutSec"}, nil)
 
 	// session 相关指标
-	Session = prometheus.NewDesc(prometheus.BuildFQName(namespace, "session", "session_info"), "Session info", []string{"id", "identifier", "local_ip", "local_port", "peer_ip", "peer_port", "typeid"}, nil)
+	SessionInfo  = prometheus.NewDesc(prometheus.BuildFQName(namespace, "session", "session_info"), "Session info", []string{"id", "identifier", "local_ip", "local_port", "peer_ip", "peer_port", "typeid"}, nil)
+	SessionTotal = prometheus.NewDesc(prometheus.BuildFQName(namespace, "session", "total"), "Total number of sessions", []string{}, nil)
 
 	// stream 相关指标
 	StreamTotal       = prometheus.NewDesc(prometheus.BuildFQName(namespace, "stream", "total"), "Total number of streams", []string{}, nil)
@@ -104,7 +103,8 @@ var (
 	SteamBandwidth    = prometheus.NewDesc(prometheus.BuildFQName(namespace, "stream", "bandwidth"), "Stream bandwidth", []string{"app", "id", "vhost", "originType"}, nil)
 
 	// media 相关指标
-	MediaPlayer = prometheus.NewDesc(prometheus.BuildFQName(namespace, "media", "player"), "Media player list", []string{"identifier", "local_ip", "local_port", "peer_ip", "peer_port", "typeid"}, nil)
+	MediaPlayerInfo  = prometheus.NewDesc(prometheus.BuildFQName(namespace, "media", "player"), "Media player list", []string{"identifier", "local_ip", "local_port", "peer_ip", "peer_port", "typeid"}, nil)
+	MediaPlayerTotal = prometheus.NewDesc(prometheus.BuildFQName(namespace, "media", "player_total"), "Total number of media players", []string{}, nil)
 
 	// rtp 相关指标
 	RtpServer      = prometheus.NewDesc(prometheus.BuildFQName(namespace, "rtp", "server"), "RTP server list", []string{"port", "stream_id"}, nil)
@@ -288,9 +288,9 @@ func (e *Exporter) extractNetworkThreads(ch chan<- prometheus.Metric) {
 			delayTotal += data.Delay
 			total++
 		}
-		ch <- prometheus.MustNewConstMetric(ThreadsTotal, prometheus.GaugeValue, total)
-		ch <- prometheus.MustNewConstMetric(ThreadsLoadTotal, prometheus.GaugeValue, loadTotal)
-		ch <- prometheus.MustNewConstMetric(ThreadsDelayTotal, prometheus.GaugeValue, delayTotal)
+		ch <- prometheus.MustNewConstMetric(NetworkThreadsTotal, prometheus.GaugeValue, total)
+		ch <- prometheus.MustNewConstMetric(NetworkThreadsLoadTotal, prometheus.GaugeValue, loadTotal)
+		ch <- prometheus.MustNewConstMetric(NetworkThreadsDelayTotal, prometheus.GaugeValue, delayTotal)
 		return nil
 	}
 	e.fetchHTTP(ch, "index/api/getThreadsLoad", processFunc)
@@ -350,6 +350,8 @@ func (e *Exporter) extractStatistics(ch chan<- prometheus.Metric) {
 	}
 	e.fetchHTTP(ch, "index/api/getStatistic", processFunc)
 }
+
+// todo: 这个指标可能没多大必要
 func (e *Exporter) extractServerConfig(ch chan<- prometheus.Metric) {
 	processFunc := func(body io.ReadCloser) error {
 		var apiResponse APIResponseGeneric[[]map[string]string]
@@ -401,8 +403,9 @@ func (e *Exporter) extractSession(ch chan<- prometheus.Metric) {
 			peerIP := fmt.Sprint(v["peer_ip"])
 			peerPort := fmt.Sprint(v["peer_port"])
 			typeID := fmt.Sprint(v["typeid"])
-			ch <- prometheus.MustNewConstMetric(Session, prometheus.GaugeValue, float64(i), id, identifier, localIP, localPort, peerIP, peerPort, typeID)
+			ch <- prometheus.MustNewConstMetric(SessionInfo, prometheus.GaugeValue, float64(i), id, identifier, localIP, localPort, peerIP, peerPort, typeID)
 		}
+		ch <- prometheus.MustNewConstMetric(SessionTotal, prometheus.GaugeValue, float64(len(apiResponse.Data)))
 		return nil
 	}
 	e.fetchHTTP(ch, "index/api/getAllSession", processFunc)
@@ -457,8 +460,9 @@ func (e *Exporter) extractMedia(ch chan<- prometheus.Metric) {
 			peerIp := fmt.Sprint(v["peer_ip"])
 			peerPort := fmt.Sprint(v["peer_port"])
 			typeid := fmt.Sprint(v["typeid"])
-			ch <- prometheus.MustNewConstMetric(MediaPlayer, prometheus.GaugeValue, float64(i), identifier, localIP, localPort, peerIp, peerPort, typeid)
+			ch <- prometheus.MustNewConstMetric(MediaPlayerInfo, prometheus.GaugeValue, float64(i), identifier, localIP, localPort, peerIp, peerPort, typeid)
 		}
+		ch <- prometheus.MustNewConstMetric(MediaPlayerTotal, prometheus.GaugeValue, float64(len(apiResponse.Data)))
 		return nil
 	}
 	e.fetchHTTP(ch, "index/api/getMediaList", processFunc)
