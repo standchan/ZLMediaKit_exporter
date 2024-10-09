@@ -194,13 +194,13 @@ func (e *Exporter) scrape(ch chan<- prometheus.Metric) (up float64) {
 	return 1
 }
 
-type APIResponseDataNetworkThreads []struct {
+type APIResponseDataThreads []struct {
 	Load  float64 `json:"load"`
 	Delay float64 `json:"delay"`
 }
 
 type APIResponseData interface {
-	[]struct{} | map[string]interface{} | []map[string]string | []map[string]interface{} | []string | APIResponseDataNetworkThreads
+	[]struct{} | map[string]interface{} | []map[string]string | []map[string]interface{} | []string | APIResponseDataThreads
 }
 
 type APIResponseGeneric[T APIResponseData] struct {
@@ -273,7 +273,7 @@ func (e *Exporter) extractAPIStatus(ch chan<- prometheus.Metric) {
 }
 func (e *Exporter) extractNetworkThreads(ch chan<- prometheus.Metric) {
 	processFunc := func(body io.ReadCloser) error {
-		var threadsLoad APIResponseGeneric[APIResponseDataNetworkThreads]
+		var threadsLoad APIResponseGeneric[APIResponseDataThreads]
 		if err := json.NewDecoder(body).Decode(&threadsLoad); err != nil {
 			return fmt.Errorf("error decoding JSON response: %w", err)
 		}
@@ -298,14 +298,7 @@ func (e *Exporter) extractNetworkThreads(ch chan<- prometheus.Metric) {
 
 func (e *Exporter) extractWorkThreads(ch chan<- prometheus.Metric) {
 	processFunc := func(body io.ReadCloser) error {
-		type ThreadsLoad struct {
-			Code int `json:"code"`
-			Data []struct {
-				Load  float64 `json:"load"`
-				Delay float64 `json:"delay"`
-			}
-		}
-		var threadsLoad ThreadsLoad
+		var threadsLoad APIResponseGeneric[APIResponseDataThreads]
 		if err := json.NewDecoder(body).Decode(&threadsLoad); err != nil {
 			return fmt.Errorf("error decoding JSON response: %w", err)
 		}
