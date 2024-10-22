@@ -99,8 +99,8 @@ var (
 
 	// stream 相关指标
 	StreamTotal       = prometheus.NewDesc(prometheus.BuildFQName(namespace, "stream", "total"), "Total number of streams", []string{}, nil)
-	StreamReaderCount = prometheus.NewDesc(prometheus.BuildFQName(namespace, "stream", "reader_count"), "Stream reader count", []string{"app", "id", "vhost", "originType"}, nil)
-	SteamBandwidth    = prometheus.NewDesc(prometheus.BuildFQName(namespace, "stream", "bandwidth"), "Stream bandwidth", []string{"app", "id", "vhost", "originType"}, nil)
+	StreamReaderCount = prometheus.NewDesc(prometheus.BuildFQName(namespace, "stream", "reader_count"), "Stream reader count", []string{"app", "stream", "schema", "vhost"}, nil)
+	SteamBandwidth    = prometheus.NewDesc(prometheus.BuildFQName(namespace, "stream", "bandwidth"), "Stream bandwidth", []string{"app", "stream", "schema", "vhost", "originType"}, nil)
 
 	// media 相关指标
 	MediaPlayerInfo  = prometheus.NewDesc(prometheus.BuildFQName(namespace, "media", "player"), "Media player list", []string{"identifier", "local_ip", "local_port", "peer_ip", "peer_port", "typeid"}, nil)
@@ -420,11 +420,14 @@ func (e *Exporter) extractStream(ch chan<- prometheus.Metric) {
 		if apiResponse.Code != 0 {
 			return fmt.Errorf("unexpected API response code: %d", apiResponse.Code)
 		}
+
 		for _, v := range apiResponse.Data {
 			app := fmt.Sprint(v["app"])
-			id := fmt.Sprint(v["stream"])
+			stream := fmt.Sprint(v["stream"])
+			schema := fmt.Sprint(v["schema"])
 			readerCount, ok := v["totalReaderCount"].(float64)
 			if !ok {
+				e.logger.Println("msg", "Error converting totalReaderCount to float64")
 				continue
 				// todo error handle
 			}
@@ -432,11 +435,13 @@ func (e *Exporter) extractStream(ch chan<- prometheus.Metric) {
 			originType := fmt.Sprint(v["originType"])
 			bytesSpeed, ok := v["bytesSpeed"].(float64)
 			if !ok {
+				e.logger.Println("msg", "Error converting bytesSpeed to float64")
 				continue
 				// todo error handle
 			}
-			ch <- prometheus.MustNewConstMetric(StreamReaderCount, prometheus.GaugeValue, readerCount, app, id, vhost, originType)
-			ch <- prometheus.MustNewConstMetric(SteamBandwidth, prometheus.GaugeValue, bytesSpeed, app, id, vhost, originType)
+			// 如果一个scrapy中，发送重复的数据，就会报错
+			ch <- prometheus.MustNewConstMetric(StreamReaderCount, prometheus.GaugeValue, readerCount, app, stream, schema, vhost)
+			ch <- prometheus.MustNewConstMetric(SteamBandwidth, prometheus.GaugeValue, bytesSpeed, app, stream, schema, vhost, originType)
 		}
 		ch <- prometheus.MustNewConstMetric(StreamTotal, prometheus.GaugeValue, float64(len(apiResponse.Data)))
 		return nil
