@@ -3,6 +3,12 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"os"
+	"sync"
+
 	"github.com/alecthomas/kingpin/v2"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -12,11 +18,6 @@ import (
 	"github.com/prometheus/exporter-toolkit/web"
 	webflag "github.com/prometheus/exporter-toolkit/web/kingpinflag"
 	"github.com/sirupsen/logrus"
-	"io"
-	"net/http"
-	"net/url"
-	"os"
-	"sync"
 )
 
 // todo: 考虑zlm版本更迭的api字段变动和废弃问题；可以用丢弃指标的方式来处理？
@@ -280,9 +281,8 @@ func (e *Exporter) extractNetworkThreads(ch chan<- prometheus.Metric) {
 		if threadsLoad.Code != 0 {
 			return fmt.Errorf("unexpected API response code: %d", threadsLoad.Code)
 		}
-		loadTotal := float64(0)
-		delayTotal := float64(0)
-		total := float64(0)
+
+		var loadTotal, delayTotal, total float64
 		for _, data := range threadsLoad.Data {
 			loadTotal += data.Load
 			delayTotal += data.Delay
@@ -305,9 +305,7 @@ func (e *Exporter) extractWorkThreads(ch chan<- prometheus.Metric) {
 		if threadsLoad.Code != 0 {
 			return fmt.Errorf("unexpected API response code: %d", threadsLoad.Code)
 		}
-		loadTotal := float64(0)
-		delayTotal := float64(0)
-		total := float64(0)
+		var loadTotal, delayTotal, total float64
 		for _, data := range threadsLoad.Data {
 			loadTotal += data.Load
 			delayTotal += data.Delay
