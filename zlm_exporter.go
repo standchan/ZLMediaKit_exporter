@@ -45,18 +45,18 @@ var (
 	ZLMediaKitInfo = prometheus.NewDesc(prometheus.BuildFQName(namespace, "zlm", "version_info"), "ZLMediaKit version info.", []string{"branchName", "buildTime", "commitHash"}, nil)
 	ApiStatus      = prometheus.NewDesc(prometheus.BuildFQName(namespace, "api", "status"), "Shows the status of each API endpoint", []string{"endpoint"}, nil)
 
-	// 网络线程相关指标
+	// network threads metric
 	// todo Threads指标可能用constLabels更好？
 	NetworkThreadsTotal      = prometheus.NewDesc(prometheus.BuildFQName(namespace, "network", "threads_total"), "Total number of network threads", []string{}, nil)
 	NetworkThreadsLoadTotal  = prometheus.NewDesc(prometheus.BuildFQName(namespace, "network", "threads_load_total"), "Total of network threads load", []string{}, nil)
 	NetworkThreadsDelayTotal = prometheus.NewDesc(prometheus.BuildFQName(namespace, "network", "threads_delay_total"), "Total of network threads delay", []string{}, nil)
 
-	// 工作线程相关指标
+	// work threads metrics
 	WorkThreadsTotal      = prometheus.NewDesc(prometheus.BuildFQName(namespace, "work", "threads_total"), "Total number of work threads", []string{}, nil)
 	WorkThreadsLoadTotal  = prometheus.NewDesc(prometheus.BuildFQName(namespace, "work", "threads_load_total"), "Total of work threads load", []string{}, nil)
 	WorkThreadsDelayTotal = prometheus.NewDesc(prometheus.BuildFQName(namespace, "work", "threads_delay_total"), "Total of work threads delay", []string{}, nil)
 
-	// 主要对象相关指标
+	// statistics metrics
 	StatisticsBuffer                = prometheus.NewDesc(prometheus.BuildFQName(namespace, "statistics", "buffer"), "Statistics buffer", []string{}, nil)
 	StatisticsBufferLikeString      = prometheus.NewDesc(prometheus.BuildFQName(namespace, "statistics", "buffer_like_string"), "Statistics BufferLikeString", []string{}, nil)
 	StatisticsBufferList            = prometheus.NewDesc(prometheus.BuildFQName(namespace, "statistics", "buffer_list"), "Statistics BufferList", []string{}, nil)
@@ -74,7 +74,7 @@ var (
 	StatisticsUdpServer             = prometheus.NewDesc(prometheus.BuildFQName(namespace, "statistics", "udp_server"), "Statistics UdpServer", []string{}, nil)
 	StatisticsUdpSession            = prometheus.NewDesc(prometheus.BuildFQName(namespace, "statistics", "udp_session"), "Statistics UdpSession", []string{}, nil)
 
-	// 服务器配置相关指标
+	// server config metrics
 	ServerApiInfo   = prometheus.NewDesc(prometheus.BuildFQName(namespace, "server", "api_info"), "Server config about api", []string{"apiDebug", "defaultSnap", "downloadRoot", "secret", "snapRoot"}, nil)
 	ServerCluster   = prometheus.NewDesc(prometheus.BuildFQName(namespace, "server", "cluster_info"), "Server config about cluster", []string{"origin_url", "retry_Count", "timeout_sec"}, nil)
 	ServerFFmpeg    = prometheus.NewDesc(prometheus.BuildFQName(namespace, "server", "ffmpeg_info"), "Server config about ffmpeg", []string{"bin", "cmd", "log", "restart_sec", "snap"}, nil)
@@ -93,20 +93,20 @@ var (
 	ServerShell     = prometheus.NewDesc(prometheus.BuildFQName(namespace, "server", "shell_info"), "Server config about shell", []string{"maxReqSize", "port"}, nil)
 	ServerSrt       = prometheus.NewDesc(prometheus.BuildFQName(namespace, "server", "srt_info"), "Server config about srt", []string{"latencyMul", "pktBufSize", "port", "timeoutSec"}, nil)
 
-	// session 相关指标
+	// session metrics
 	SessionInfo  = prometheus.NewDesc(prometheus.BuildFQName(namespace, "session", "session_info"), "Session info", []string{"id", "identifier", "local_ip", "local_port", "peer_ip", "peer_port", "typeid"}, nil)
 	SessionTotal = prometheus.NewDesc(prometheus.BuildFQName(namespace, "session", "total"), "Total number of sessions", []string{}, nil)
 
-	// stream 相关指标
+	// stream metrics
 	StreamTotal       = prometheus.NewDesc(prometheus.BuildFQName(namespace, "stream", "total"), "Total number of streams", []string{}, nil)
 	StreamReaderCount = prometheus.NewDesc(prometheus.BuildFQName(namespace, "stream", "reader_count"), "Stream reader count", []string{"app", "stream", "schema", "vhost"}, nil)
 	SteamBandwidth    = prometheus.NewDesc(prometheus.BuildFQName(namespace, "stream", "bandwidth"), "Stream bandwidth", []string{"app", "stream", "schema", "vhost", "originType"}, nil)
 
-	// media 相关指标
+	// media metrics
 	MediaPlayerInfo  = prometheus.NewDesc(prometheus.BuildFQName(namespace, "media", "player"), "Media player list", []string{"identifier", "local_ip", "local_port", "peer_ip", "peer_port", "typeid"}, nil)
 	MediaPlayerTotal = prometheus.NewDesc(prometheus.BuildFQName(namespace, "media", "player_total"), "Total number of media players", []string{}, nil)
 
-	// rtp 相关指标
+	// rtp metrics
 	RtpServer      = prometheus.NewDesc(prometheus.BuildFQName(namespace, "rtp", "server"), "RTP server list", []string{"port", "stream_id"}, nil)
 	RtpServerTotal = prometheus.NewDesc(prometheus.BuildFQName(namespace, "rtp", "server_total"), "Total number of RTP servers", []string{}, nil)
 )
