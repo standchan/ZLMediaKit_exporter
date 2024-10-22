@@ -190,7 +190,6 @@ func (e *Exporter) scrape(ch chan<- prometheus.Metric) (up float64) {
 	e.extractServerConfig(ch)
 	e.extractSession(ch)
 	e.extractStream(ch)
-	e.extractMedia(ch)
 	e.extractRtp(ch)
 	return 1
 }
@@ -447,29 +446,7 @@ func (e *Exporter) extractStream(ch chan<- prometheus.Metric) {
 	e.fetchHTTP(ch, "index/api/getMediaList", processFunc)
 
 }
-func (e *Exporter) extractMedia(ch chan<- prometheus.Metric) {
-	processFunc := func(body io.ReadCloser) error {
-		var apiResponse APIResponseGeneric[[]map[string]interface{}]
-		if err := json.NewDecoder(body).Decode(&apiResponse); err != nil {
-			return fmt.Errorf("error decoding JSON response: %w", err)
-		}
-		if apiResponse.Code != 0 {
-			return fmt.Errorf("unexpected API response code: %d", apiResponse.Code)
-		}
-		for i, v := range apiResponse.Data {
-			identifier := fmt.Sprint(v["identifier"])
-			localIP := fmt.Sprint(v["local_ip"])
-			localPort := fmt.Sprint(v["local_port"])
-			peerIp := fmt.Sprint(v["peer_ip"])
-			peerPort := fmt.Sprint(v["peer_port"])
-			typeid := fmt.Sprint(v["typeid"])
-			ch <- prometheus.MustNewConstMetric(MediaPlayerInfo, prometheus.GaugeValue, float64(i), identifier, localIP, localPort, peerIp, peerPort, typeid)
-		}
-		ch <- prometheus.MustNewConstMetric(MediaPlayerTotal, prometheus.GaugeValue, float64(len(apiResponse.Data)))
-		return nil
-	}
-	e.fetchHTTP(ch, "index/api/getMediaList", processFunc)
-}
+
 func (e *Exporter) extractRtp(ch chan<- prometheus.Metric) {
 	processFunc := func(body io.ReadCloser) error {
 		var apiResponse APIResponseGeneric[[]map[string]interface{}]
