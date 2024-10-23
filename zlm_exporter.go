@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"sync"
 
 	"github.com/alecthomas/kingpin/v2"
@@ -27,6 +28,23 @@ import (
 const (
 	namespace = "zlmediakit"
 )
+
+func getEnv(key string, defaultVal string) string {
+	if envVal, ok := os.LookupEnv(key); ok {
+		return envVal
+	}
+	return defaultVal
+}
+
+func getEnvBool(key string, defaultVal bool) bool {
+	if envVal, ok := os.LookupEnv(key); ok {
+		envBool, err := strconv.ParseBool(envVal)
+		if err == nil {
+			return envBool
+		}
+	}
+	return defaultVal
+}
 
 var (
 	/*
@@ -472,10 +490,18 @@ func (e *Exporter) extractRtp(ch chan<- prometheus.Metric) {
 func main() {
 	var (
 		webConfig    = webflag.AddFlags(kingpin.CommandLine, ":9101")
-		metricsPath  = kingpin.Flag("web.telemetry-path", "Path under which to expose metrics.").Default("/metrics").String()
-		zlmScrapeURI = kingpin.Flag("zlm.scrape-uri", "URI on which to scrape zlmediakit.").Default("http://localhost").String()
-		zlmSSLVerify = kingpin.Flag("zlm.ssl-verify", "Flag that enables SSL certificate verification for the scrape URI").Default("true").Bool()
-		logFormat    = kingpin.Flag("log-format", "Log format, valid options are txt and json").Default("").String()
+		metricsPath  = kingpin.Flag("web.telemetry-path", "Path under which to expose metrics.").Default(getEnv("ZLM_EXPORTER_METRICS_PATH", "/metrics")).String()
+		zlmScrapeURI = kingpin.Flag("zlm.scrape-uri", "URI on which to scrape zlmediakit.").Default(getEnv("ZLM_EXPORTER_ZLM_SCRAPE_URI", "http://localhost")).String()
+		zlmSSLVerify = kingpin.Flag("zlm.ssl-verify", "Flag that enables SSL certificate verification for the scrape URI").Default(getEnv("ZLM_EXPORTER_ZLM_SSL_VERIFY", "true")).Bool()
+		logFormat    = kingpin.Flag("log-format", "Log format, valid options are txt and json").Default(getEnv("ZLM_EXPORTER_LOG_FORMAT", "txt")).String()
+
+		tlsClientCertFile   = kingpin.Flag("tls.client-cert-file", "Path to the client certificate file").Default(getEnv("ZLM_EXPORTER_TLS_CLIENT_CERT_FILE", "")).String()
+		tlsClientKeyFile    = kingpin.Flag("tls.client-key-file", "Path to the client key file").Default(getEnv("ZLM_EXPORTER_TLS_CLIENT_KEY_FILE", "")).String()
+		tlsCACertFile       = kingpin.Flag("tls.ca-cert-file", "Path to the CA certificate file").Default(getEnv("ZLM_EXPORTER_TLS_CA_CERT_FILE", "")).String()
+		tlsServerKeyFile    = kingpin.Flag("tls.server-key-file", "Path to the server key file").Default(getEnv("ZLM_EXPORTER_TLS_SERVER_KEY_FILE", "")).String()
+		tlsServerCertFile   = kingpin.Flag("tls.server-cert-file", "Path to the server certificate file").Default(getEnv("ZLM_EXPORTER_TLS_SERVER_CERT_FILE", "")).String()
+		tlsServerCaCertFile = kingpin.Flag("tls.server-ca-cert-file", "Path to the server CA certificate file").Default(getEnv("ZLM_EXPORTER_TLS_SERVER_CA_CERT_FILE", "")).String()
+		tlsServerMinVersion = kingpin.Flag("tls.server-min-version", "Minimum TLS version supported").Default(getEnv("ZLM_EXPORTER_TLS_SERVER_MIN_VERSION", "")).String()
 	)
 
 	promlogConfig := &promlog.Config{}
@@ -508,7 +534,6 @@ func main() {
 	}
 	prometheus.MustRegister(exporter)
 
-	//prometheus.MustRegister(version.NewCollector("zlm_exporter"))
 	http.Handle(*metricsPath, promhttp.Handler())
 	srv := &http.Server{}
 	if err := web.ListenAndServe(srv, webConfig, promlog.New(promlogConfig)); err != nil {
