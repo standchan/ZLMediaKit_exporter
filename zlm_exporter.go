@@ -121,10 +121,6 @@ var (
 	StreamReaderCount = prometheus.NewDesc(prometheus.BuildFQName(namespace, "stream", "reader_count"), "Stream reader count", []string{"app", "stream", "schema", "vhost"}, nil)
 	SteamBandwidth    = prometheus.NewDesc(prometheus.BuildFQName(namespace, "stream", "bandwidth"), "Stream bandwidth", []string{"app", "stream", "schema", "vhost", "originType"}, nil)
 
-	// media metrics
-	MediaPlayerInfo  = prometheus.NewDesc(prometheus.BuildFQName(namespace, "media", "player"), "Media player list", []string{"identifier", "local_ip", "local_port", "peer_ip", "peer_port", "typeid"}, nil)
-	MediaPlayerTotal = prometheus.NewDesc(prometheus.BuildFQName(namespace, "media", "player_total"), "Total number of media players", []string{}, nil)
-
 	// rtp metrics
 	RtpServer      = prometheus.NewDesc(prometheus.BuildFQName(namespace, "rtp", "server"), "RTP server list", []string{"port", "stream_id"}, nil)
 	RtpServerTotal = prometheus.NewDesc(prometheus.BuildFQName(namespace, "rtp", "server_total"), "Total number of RTP servers", []string{}, nil)
