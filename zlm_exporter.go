@@ -251,7 +251,7 @@ func (e *Exporter) fetchHTTP(ch chan<- prometheus.Metric, endpoint string, proce
 }
 
 func (e *Exporter) extractZLMVersion(ch chan<- prometheus.Metric) {
-	fetchFunc := func(body io.ReadCloser) error {
+	processFunc := func(body io.ReadCloser) error {
 		var apiResponse APIResponseGeneric[map[string]interface{}]
 		if err := json.NewDecoder(body).Decode(&apiResponse); err != nil {
 			return fmt.Errorf("error decoding JSON response: %w", err)
@@ -263,7 +263,7 @@ func (e *Exporter) extractZLMVersion(ch chan<- prometheus.Metric) {
 		ch <- prometheus.MustNewConstMetric(ZLMediaKitInfo, prometheus.GaugeValue, 1, data["branchName"].(string), data["buildTime"].(string), data["commitHash"].(string))
 		return nil
 	}
-	e.fetchHTTP(ch, "index/api/version", fetchFunc)
+	e.fetchHTTP(ch, "index/api/version", processFunc)
 }
 func (e *Exporter) extractAPIStatus(ch chan<- prometheus.Metric) {
 	processFunc := func(body io.ReadCloser) error {
