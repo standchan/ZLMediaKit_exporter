@@ -228,8 +228,6 @@ type APIResponseGeneric[T APIResponseData] struct {
 }
 
 func (e *Exporter) fetchHTTP(ch chan<- prometheus.Metric, endpoint string, processFunc func(closer io.ReadCloser) error) {
-	header := http.Header{}
-	header.Add("secret", ZLMSecret)
 	uri := fmt.Sprintf("%s/%s", e.URI, endpoint)
 	parsedURL, err := url.Parse(uri)
 	if err != nil {
@@ -240,7 +238,9 @@ func (e *Exporter) fetchHTTP(ch chan<- prometheus.Metric, endpoint string, proce
 	req := &http.Request{
 		Method: http.MethodGet,
 		URL:    parsedURL,
-		Header: header,
+		Header: http.Header{
+			"secret": []string{ZLMSecret},
+		},
 	}
 
 	res, err := e.client.Do(req)
