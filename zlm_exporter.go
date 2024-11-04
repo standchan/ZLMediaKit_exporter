@@ -2,15 +2,20 @@ package main
 
 import (
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"os"
+	"os/signal"
 	"strconv"
 	"sync"
+	"syscall"
+	"time"
 
+	"context"
 	"github.com/alecthomas/kingpin/v2"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -142,9 +147,12 @@ type Exporter struct {
 }
 
 type Options struct {
-	ScrapeURI  string
-	SSLVerify  bool
-	CaCertFile string
+	ScrapeURI           string
+	SSLVerify           bool
+	ClientCertFile      string
+	ClientKeyFile       string
+	CaCertFile          string
+	SkipTLSVerification bool
 }
 
 type BuildInfo struct {
@@ -180,6 +188,121 @@ func NewExporter(logger *logrus.Logger, options Options) (*Exporter, error) {
 	}
 
 	return exporter, nil
+}
+
+func (e *Exporter) CreateClientTLSConfig() (*tls.Config, error) {
+	tlsConfig := tls.Config{
+		InsecureSkipVerify: e.options.SkipTLSVerification,
+	}
+
+	if e.options.ClientCertFile != "" && e.options.ClientKeyFile != "" {
+		cert, err := LoadKeyPair(e.options.ClientCertFile, e.options.ClientKeyFile)
+		if err != nil {
+			return nil, err
+		}
+		tlsConfig.Certificates = []tls.Certificate{*cert}
+	}
+
+	if e.options.CaCertFile != "" {
+		certificates, err := LoadCAFile(e.options.CaCertFile)
+		if err != nil {
+			return nil, err
+		}
+		tlsConfig.RootCAs = certificates
+	} else {
+		// Load the system certificate pool
+		rootCAs, err := x509.SystemCertPool()
+		if err != nil {
+			return nil, err
+		}
+
+		tlsConfig.RootCAs = rootCAs
+	}
+
+	return &tlsConfig, nil
+}
+
+var tlsVersions = map[string]uint16{
+	"TLS1.3": tls.VersionTLS13,
+	"TLS1.2": tls.VersionTLS12,
+	"TLS1.1": tls.VersionTLS11,
+	"TLS1.0": tls.VersionTLS10,
+}
+
+// GetServerCertificateFunc returns a function for tls.Config.GetCertificate
+func GetServerCertificateFunc(certFile, keyFile string) func(*tls.ClientHelloInfo) (*tls.Certificate, error) {
+	return func(*tls.ClientHelloInfo) (*tls.Certificate, error) {
+		return LoadKeyPair(certFile, keyFile)
+	}
+}
+
+// GetConfigForClientFunc returns a function for tls.Config.GetConfigForClient
+func GetConfigForClientFunc(certFile, keyFile, caCertFile string) func(*tls.ClientHelloInfo) (*tls.Config, error) {
+	return func(*tls.ClientHelloInfo) (*tls.Config, error) {
+		certificates, err := LoadCAFile(caCertFile)
+		if err != nil {
+			return nil, err
+		}
+
+		tlsConfig := tls.Config{
+			ClientAuth:     tls.RequireAndVerifyClientCert,
+			ClientCAs:      certificates,
+			GetCertificate: GetServerCertificateFunc(certFile, keyFile),
+		}
+		return &tlsConfig, nil
+	}
+}
+
+func (e *Exporter) CreateServerTLSConfig(certFile, keyFile, caCertFile, minVersionString string) (*tls.Config, error) {
+	// Verify that the initial key pair is accepted
+	_, err := LoadKeyPair(certFile, keyFile)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get minimum acceptable TLS version from the config string
+	minVersion, ok := tlsVersions[minVersionString]
+	if !ok {
+		return nil, fmt.Errorf("configured minimum TLS version unknown: '%s'", minVersionString)
+	}
+
+	tlsConfig := tls.Config{
+		MinVersion:     minVersion,
+		GetCertificate: GetServerCertificateFunc(certFile, keyFile),
+	}
+
+	if caCertFile != "" {
+		// Verify that the initial CA file is accepted when configured
+		_, err := LoadCAFile(caCertFile)
+		if err != nil {
+			return nil, err
+		}
+		tlsConfig.GetConfigForClient = GetConfigForClientFunc(certFile, keyFile, caCertFile)
+	}
+
+	return &tlsConfig, nil
+}
+
+// LoadKeyPair reads and parses a public/private key pair from a pair of files.
+// The files must contain PEM encoded data.
+func LoadKeyPair(certFile, keyFile string) (*tls.Certificate, error) {
+	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
+	if err != nil {
+		return nil, err
+	}
+	return &cert, nil
+}
+
+// LoadCAFile reads and parses CA certificates from a file into a pool.
+// The file must contain PEM encoded data.
+func LoadCAFile(caFile string) (*x509.CertPool, error) {
+	pemCerts, err := os.ReadFile(caFile)
+	if err != nil {
+		return nil, err
+	}
+	pool := x509.NewCertPool()
+	pool.AppendCertsFromPEM(pemCerts)
+	return pool, nil
 }
 
 func (e *Exporter) Describe(ch chan<- *prometheus.Desc) {
@@ -494,13 +617,14 @@ var (
 	zlmSecret    = kingpin.Flag("zlm.secret", "Secret for the scrape URI").Default(getEnv("ZLM_EXPORTER_SECRET", "")).String()
 	logFormat    = kingpin.Flag("zlm.log-format", "Log format, valid options are txt and json").Default(getEnv("ZLM_EXPORTER_LOG_FORMAT", "txt")).String()
 
-	// tlsClientCertFile   = kingpin.Flag("tls.client-cert-file", "Path to the client certificate file").Default(getEnv("ZLM_EXPORTER_TLS_CLIENT_CERT_FILE", "")).String()
-	// tlsClientKeyFile    = kingpin.Flag("tls.client-key-file", "Path to the client key file").Default(getEnv("ZLM_EXPORTER_TLS_CLIENT_KEY_FILE", "")).String()
-	// tlsCACertFile       = kingpin.Flag("tls.ca-cert-file", "Path to the CA certificate file").Default(getEnv("ZLM_EXPORTER_TLS_CA_CERT_FILE", "")).String()
-	// tlsServerKeyFile    = kingpin.Flag("tls.server-key-file", "Path to the server key file").Default(getEnv("ZLM_EXPORTER_TLS_SERVER_KEY_FILE", "")).String()
-	// tlsServerCertFile   = kingpin.Flag("tls.server-cert-file", "Path to the server certificate file").Default(getEnv("ZLM_EXPORTER_TLS_SERVER_CERT_FILE", "")).String()
-	// tlsServerCaCertFile = kingpin.Flag("tls.server-ca-cert-file", "Path to the server CA certificate file").Default(getEnv("ZLM_EXPORTER_TLS_SERVER_CA_CERT_FILE", "")).String()
-	// tlsServerMinVersion = kingpin.Flag("tls.server-min-version", "Minimum TLS version supported").Default(getEnv("ZLM_EXPORTER_TLS_SERVER_MIN_VERSION", "")).String()
+	tlsClientCertFile   = kingpin.Flag("tls.client-cert-file", "Path to the client certificate file").Default(getEnv("ZLM_EXPORTER_TLS_CLIENT_CERT_FILE", "")).String()
+	tlsClientKeyFile    = kingpin.Flag("tls.client-key-file", "Path to the client key file").Default(getEnv("ZLM_EXPORTER_TLS_CLIENT_KEY_FILE", "")).String()
+	tlsCACertFile       = kingpin.Flag("tls.ca-cert-file", "Path to the CA certificate file").Default(getEnv("ZLM_EXPORTER_TLS_CA_CERT_FILE", "")).String()
+	tlsServerKeyFile    = kingpin.Flag("tls.server-key-file", "Path to the server key file").Default(getEnv("ZLM_EXPORTER_TLS_SERVER_KEY_FILE", "")).String()
+	tlsServerCertFile   = kingpin.Flag("tls.server-cert-file", "Path to the server certificate file").Default(getEnv("ZLM_EXPORTER_TLS_SERVER_CERT_FILE", "")).String()
+	tlsServerCaCertFile = kingpin.Flag("tls.server-ca-cert-file", "Path to the server CA certificate file").Default(getEnv("ZLM_EXPORTER_TLS_SERVER_CA_CERT_FILE", "")).String()
+	tlsServerMinVersion = kingpin.Flag("tls.server-min-version", "Minimum TLS version supported").Default(getEnv("ZLM_EXPORTER_TLS_SERVER_MIN_VERSION", "")).String()
+	skipTLSVerification = kingpin.Flag("tls.skip-verify", "Skip TLS verification").Default(getEnv("ZLM_EXPORTER_TLS_SKIP_VERIFY", "false")).Bool()
 )
 
 // doc: https://prometheus.io/docs/instrumenting/writing_exporters/
@@ -526,8 +650,12 @@ func main() {
 	log.Println("msg", "Build context", "context", version.BuildContext())
 
 	option := Options{
-		ScrapeURI: *zlmScrapeURI,
-		SSLVerify: *zlmSSLVerify,
+		ScrapeURI:           *zlmScrapeURI,
+		SSLVerify:           *zlmSSLVerify,
+		ClientCertFile:      *tlsClientCertFile,
+		ClientKeyFile:       *tlsClientKeyFile,
+		CaCertFile:          *tlsCACertFile,
+		SkipTLSVerification: *skipTLSVerification,
 	}
 
 	exporter, err := NewExporter(log, option)
@@ -535,13 +663,49 @@ func main() {
 		log.Println("msg", "Error creating exporter", "err", err)
 		os.Exit(1)
 	}
-	prometheus.MustRegister(exporter)
 
-	http.Handle(*metricsPath, promhttp.Handler())
-	srv := &http.Server{}
-	if err := web.ListenAndServe(srv, webConfig, promlog.New(promlogConfig)); err != nil {
-		log.Error("msg", "Error starting HTTP server", "err", err)
-		os.Exit(1)
+	// Verify that initial client keypair and CA are accepted
+	if (*tlsClientCertFile != "") != (*tlsClientKeyFile != "") {
+		log.Fatal("TLS client key file and cert file should both be present")
 	}
 
+	// 这里是分两个部分的
+	// 1、client端配置是去请求zlm的api todo: 需要再检查一下
+	// 2、server端配置是去暴露metrics，供prometheus去拉取，所以这里需要配置两个部分的tls todo：
+	_, err = exporter.CreateClientTLSConfig()
+	if err != nil {
+		log.Fatal("msg", "Error creating client TLS config", "err", err)
+	}
+	prometheus.MustRegister(exporter)
+	http.Handle(*metricsPath, promhttp.Handler())
+	srv := &http.Server{}
+	go func() {
+		if *tlsServerCertFile != "" && *tlsServerKeyFile != "" {
+			log.Debugf("Bind as TLS using cert %s and key %s", *tlsServerCertFile, *tlsServerKeyFile)
+
+			tlsConfig, err := exporter.CreateServerTLSConfig(*tlsServerCertFile, *tlsServerKeyFile, *tlsServerCaCertFile, *tlsServerMinVersion)
+			if err != nil {
+				log.Fatal(err)
+			}
+			srv.TLSConfig = tlsConfig
+			if err := web.ListenAndServe(srv, webConfig, promlog.New(promlogConfig)); err != nil {
+				log.Fatal("msg", "Error starting HTTP server", "err", err)
+			}
+		}
+	}()
+
+	// graceful shutdown
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	_quit := <-quit
+	log.Infof("Received %s signal, exiting", _quit.String())
+	// Create a context with a timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// Shutdown the HTTP server gracefully
+	if err := srv.Shutdown(ctx); err != nil {
+		log.Fatalf("Server shutdown failed: %v", err)
+	}
+	log.Infof("Server shut down gracefully")
 }
