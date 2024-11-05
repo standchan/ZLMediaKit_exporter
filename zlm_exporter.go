@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -147,10 +148,14 @@ type Exporter struct {
 }
 
 type Options struct {
-	ScrapeURI           string
-	SSLVerify           bool
-	ClientCertFile      string
-	ClientKeyFile       string
+	ScrapeURI      string
+	ClientCertFile string
+	ClientKeyFile  string
+
+	ServerCertFile   string
+	ServerKeyFile    string
+	ServerMinVersion string
+
 	CaCertFile          string
 	SkipTLSVerification bool
 }
@@ -184,13 +189,13 @@ func NewExporter(logger *logrus.Logger, options Options) (*Exporter, error) {
 	}
 
 	exporter.client.Transport = &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: !options.SSLVerify},
+		TLSClientConfig: exporter.CreateClientTLSConfig(),
 	}
 
 	return exporter, nil
 }
 
-func (e *Exporter) CreateClientTLSConfig() (*tls.Config, error) {
+func (e *Exporter) CreateClientTLSConfig() *tls.Config {
 	tlsConfig := tls.Config{
 		InsecureSkipVerify: e.options.SkipTLSVerification,
 	}
@@ -198,7 +203,7 @@ func (e *Exporter) CreateClientTLSConfig() (*tls.Config, error) {
 	if e.options.ClientCertFile != "" && e.options.ClientKeyFile != "" {
 		cert, err := LoadKeyPair(e.options.ClientCertFile, e.options.ClientKeyFile)
 		if err != nil {
-			return nil, err
+			log.Fatal(err)
 		}
 		tlsConfig.Certificates = []tls.Certificate{*cert}
 	}
@@ -206,20 +211,20 @@ func (e *Exporter) CreateClientTLSConfig() (*tls.Config, error) {
 	if e.options.CaCertFile != "" {
 		certificates, err := LoadCAFile(e.options.CaCertFile)
 		if err != nil {
-			return nil, err
+			log.Fatal(err)
 		}
 		tlsConfig.RootCAs = certificates
 	} else {
 		// Load the system certificate pool
 		rootCAs, err := x509.SystemCertPool()
 		if err != nil {
-			return nil, err
+			log.Fatal(err)
 		}
 
 		tlsConfig.RootCAs = rootCAs
 	}
 
-	return &tlsConfig, nil
+	return &tlsConfig
 }
 
 var tlsVersions = map[string]uint16{
@@ -613,7 +618,6 @@ var (
 	webConfig    = webflag.AddFlags(kingpin.CommandLine, ":9101")
 	metricsPath  = kingpin.Flag("web.telemetry-path", "Path under which to expose metrics.").Default(getEnv("ZLM_EXPORTER_METRICS_PATH", "/metrics")).String()
 	zlmScrapeURI = kingpin.Flag("zlm.scrape-uri", "URI on which to scrape zlmediakit.").Default(getEnv("ZLM_EXPORTER_SCRAPE_URI", "http://localhost")).String()
-	zlmSSLVerify = kingpin.Flag("zlm.ssl-verify", "Flag that enables SSL certificate verification for the scrape URI").Default(getEnv("ZLM_EXPORTER_SSL_VERIFY", "true")).Bool()
 	zlmSecret    = kingpin.Flag("zlm.secret", "Secret for the scrape URI").Default(getEnv("ZLM_EXPORTER_SECRET", "")).String()
 	logFormat    = kingpin.Flag("zlm.log-format", "Log format, valid options are txt and json").Default(getEnv("ZLM_EXPORTER_LOG_FORMAT", "txt")).String()
 
@@ -651,9 +655,10 @@ func main() {
 
 	option := Options{
 		ScrapeURI:           *zlmScrapeURI,
-		SSLVerify:           *zlmSSLVerify,
 		ClientCertFile:      *tlsClientCertFile,
 		ClientKeyFile:       *tlsClientKeyFile,
+		ServerCertFile:      *tlsServerCertFile,
+		ServerKeyFile:       *tlsServerKeyFile,
 		CaCertFile:          *tlsCACertFile,
 		SkipTLSVerification: *skipTLSVerification,
 	}
@@ -669,13 +674,8 @@ func main() {
 		log.Fatal("TLS client key file and cert file should both be present")
 	}
 
-	// 这里是分两个部分的
-	// 1、client端配置是去请求zlm的api todo: 需要再检查一下
-	// 2、server端配置是去暴露metrics，供prometheus去拉取，所以这里需要配置两个部分的tls todo：
-	_, err = exporter.CreateClientTLSConfig()
-	if err != nil {
-		log.Fatal("msg", "Error creating client TLS config", "err", err)
-	}
+	exporter.CreateClientTLSConfig()
+
 	prometheus.MustRegister(exporter)
 	http.Handle(*metricsPath, promhttp.Handler())
 	srv := &http.Server{}
@@ -694,18 +694,22 @@ func main() {
 		}
 	}()
 
-	// graceful shutdown
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	_quit := <-quit
-	log.Infof("Received %s signal, exiting", _quit.String())
-	// Create a context with a timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
 
-	// Shutdown the HTTP server gracefully
-	if err := srv.Shutdown(ctx); err != nil {
-		log.Fatalf("Server shutdown failed: %v", err)
-	}
-	log.Infof("Server shut down gracefully")
+	go func() {
+		_quit := <-quit
+		log.Infof("Received %s signal, exiting", _quit.String())
+
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		// Shutdown server gracefully
+		if err := srv.Shutdown(ctx); err != nil {
+			log.Fatalf("Server shutdown failed: %v", err)
+		}
+		log.Infof("Server shut down gracefully")
+	}()
+
+	<-quit
 }
