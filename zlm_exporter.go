@@ -620,6 +620,7 @@ var (
 	zlmScrapeURI = kingpin.Flag("zlm.scrape-uri", "URI on which to scrape zlmediakit.").Default(getEnv("ZLM_EXPORTER_SCRAPE_URI", "http://localhost")).String()
 	zlmSecret    = kingpin.Flag("zlm.secret", "Secret for the scrape URI").Default(getEnv("ZLM_EXPORTER_SECRET", "")).String()
 	logFormat    = kingpin.Flag("zlm.log-format", "Log format, valid options are txt and json").Default(getEnv("ZLM_EXPORTER_LOG_FORMAT", "txt")).String()
+	logLevel     = kingpin.Flag("zlm.log-level", "Log level, valid options are debug, info, warn, error, fatal, panic").Default(getEnv("ZLM_EXPORTER_LOG_LEVEL", "info")).String()
 
 	tlsClientCertFile   = kingpin.Flag("tls.client-cert-file", "Path to the client certificate file").Default(getEnv("ZLM_EXPORTER_TLS_CLIENT_CERT_FILE", "")).String()
 	tlsClientKeyFile    = kingpin.Flag("tls.client-key-file", "Path to the client key file").Default(getEnv("ZLM_EXPORTER_TLS_CLIENT_KEY_FILE", "")).String()
@@ -641,17 +642,21 @@ func main() {
 	kingpin.HelpFlag.Short('h')
 	kingpin.Parse()
 
-	log := logrus.New()
+	logger := logrus.New()
 
 	switch *logFormat {
 	case "json":
-		log.SetFormatter(&logrus.JSONFormatter{})
+		logger.SetFormatter(&logrus.JSONFormatter{})
 	default:
-		log.SetFormatter(&logrus.TextFormatter{})
+		logger.SetFormatter(&logrus.TextFormatter{})
 	}
-	log.SetLevel(logrus.InfoLevel)
-	log.Println("msg", "Starting zlm_exporter", "version", version.Info())
-	log.Println("msg", "Build context", "context", version.BuildContext())
+	level, err := logrus.ParseLevel(*logLevel)
+	if err != nil {
+		logger.Fatal(err)
+	}
+	logger.SetLevel(level)
+	logger.Println("msg", "Starting zlm_exporter", "version", version.Info())
+	logger.Println("msg", "Build context", "context", version.BuildContext())
 
 	option := Options{
 		ScrapeURI:           *zlmScrapeURI,
@@ -663,15 +668,15 @@ func main() {
 		SkipTLSVerification: *skipTLSVerification,
 	}
 
-	exporter, err := NewExporter(log, option)
+	exporter, err := NewExporter(logger, option)
 	if err != nil {
-		log.Println("msg", "Error creating exporter", "err", err)
+		logger.Println("msg", "Error creating exporter", "err", err)
 		os.Exit(1)
 	}
 
 	// Verify that initial client keypair and CA are accepted
 	if (*tlsClientCertFile != "") != (*tlsClientKeyFile != "") {
-		log.Fatal("TLS client key file and cert file should both be present")
+		logger.Fatal("TLS client key file and cert file should both be present")
 	}
 
 	exporter.CreateClientTLSConfig()
@@ -681,15 +686,15 @@ func main() {
 	srv := &http.Server{}
 	go func() {
 		if *tlsServerCertFile != "" && *tlsServerKeyFile != "" {
-			log.Debugf("Bind as TLS using cert %s and key %s", *tlsServerCertFile, *tlsServerKeyFile)
+			logger.Debugf("Bind as TLS using cert %s and key %s", *tlsServerCertFile, *tlsServerKeyFile)
 
 			tlsConfig, err := exporter.CreateServerTLSConfig(*tlsServerCertFile, *tlsServerKeyFile, *tlsServerCaCertFile, *tlsServerMinVersion)
 			if err != nil {
-				log.Fatal(err)
+				logger.Fatal(err)
 			}
 			srv.TLSConfig = tlsConfig
 			if err := web.ListenAndServe(srv, webConfig, promlog.New(promlogConfig)); err != nil {
-				log.Fatal("msg", "Error starting HTTP server", "err", err)
+				logger.Fatal("msg", "Error starting HTTP server", "err", err)
 			}
 		}
 	}()
@@ -699,16 +704,16 @@ func main() {
 
 	go func() {
 		_quit := <-quit
-		log.Infof("Received %s signal, exiting", _quit.String())
+		logger.Infof("Received %s signal, exiting", _quit.String())
 
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
 		// Shutdown server gracefully
 		if err := srv.Shutdown(ctx); err != nil {
-			log.Fatalf("Server shutdown failed: %v", err)
+			logger.Fatalf("Server shutdown failed: %v", err)
 		}
-		log.Infof("Server shut down gracefully")
+		logger.Infof("Server shut down gracefully")
 	}()
 
 	<-quit
