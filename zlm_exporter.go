@@ -442,7 +442,6 @@ func (e *Exporter) extractNetworkThreads(ch chan<- prometheus.Metric) {
 	}
 	e.fetchHTTP(ch, "index/api/getThreadsLoad", processFunc)
 }
-
 func (e *Exporter) extractWorkThreads(ch chan<- prometheus.Metric) {
 	processFunc := func(body io.ReadCloser) error {
 		var threadsLoad APIResponseGeneric[APIResponseDataThreads]
@@ -495,8 +494,6 @@ func (e *Exporter) extractStatistics(ch chan<- prometheus.Metric) {
 	}
 	e.fetchHTTP(ch, "index/api/getStatistic", processFunc)
 }
-
-// todo: 这个指标可能没多大必要
 func (e *Exporter) extractServerConfig(ch chan<- prometheus.Metric) {
 	processFunc := func(body io.ReadCloser) error {
 		var apiResponse APIResponseGeneric[[]map[string]string]
@@ -594,7 +591,6 @@ func (e *Exporter) extractStream(ch chan<- prometheus.Metric) {
 	e.fetchHTTP(ch, "index/api/getMediaList", processFunc)
 
 }
-
 func (e *Exporter) extractRtp(ch chan<- prometheus.Metric) {
 	processFunc := func(body io.ReadCloser) error {
 		var apiResponse APIResponseGeneric[[]map[string]interface{}]
@@ -711,11 +707,11 @@ func main() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
-		// Shutdown server gracefully
+		// Shutdown zlm_exporter gracefully
 		if err := srv.Shutdown(ctx); err != nil {
-			logger.Fatalf("Server shutdown failed: %v", err)
+			logger.Fatalf("zlm_exporter shutdown failed: %v", err)
 		}
-		logger.Infof("Server shut down gracefully")
+		logger.Infof("zlm_exporter shut down gracefully")
 	}()
 
 	<-quit
