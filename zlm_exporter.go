@@ -62,75 +62,78 @@ var (
 	BuildCommitSha = "<<< filled in by build >>>"
 )
 
-type metricInfo struct {
-	Desc *prometheus.Desc
-	Type prometheus.ValueType
+var metrics []*prometheus.Desc
+
+func newMetricDescr(namespace string, metricName string, docString string, labels []string) *prometheus.Desc {
+	newDesc := prometheus.NewDesc(prometheus.BuildFQName(namespace, "", metricName), docString, labels, nil)
+	metrics = append(metrics, newDesc)
+	return newDesc
 }
 
 var (
-	ZLMediaKitInfo = prometheus.NewDesc(prometheus.BuildFQName(namespace, "zlm", "version_info"), "ZLMediaKit version info.", []string{"branchName", "buildTime", "commitHash"}, nil)
-	ApiStatus      = prometheus.NewDesc(prometheus.BuildFQName(namespace, "api", "status"), "Shows the status of each API endpoint", []string{"endpoint"}, nil)
+	ZLMediaKitInfo = newMetricDescr(namespace, "zlm_version_info", "ZLMediaKit version info.", []string{"branchName", "buildTime", "commitHash"})
+	ApiStatus      = newMetricDescr(namespace, "api_status", "Shows the status of each API endpoint", []string{"endpoint"})
 
 	// network threads metric
 	// todo Threads指标可能用constLabels更好？
-	NetworkThreadsTotal      = prometheus.NewDesc(prometheus.BuildFQName(namespace, "network", "threads_total"), "Total number of network threads", []string{}, nil)
-	NetworkThreadsLoadTotal  = prometheus.NewDesc(prometheus.BuildFQName(namespace, "network", "threads_load_total"), "Total of network threads load", []string{}, nil)
-	NetworkThreadsDelayTotal = prometheus.NewDesc(prometheus.BuildFQName(namespace, "network", "threads_delay_total"), "Total of network threads delay", []string{}, nil)
+	NetworkThreadsTotal      = newMetricDescr(namespace, "network_threads_total", "Total number of network threads", []string{})
+	NetworkThreadsLoadTotal  = newMetricDescr(namespace, "network_threads_load_total", "Total of network threads load", []string{})
+	NetworkThreadsDelayTotal = newMetricDescr(namespace, "network_threads_delay_total", "Total of network threads delay", []string{})
 
 	// work threads metrics
-	WorkThreadsTotal      = prometheus.NewDesc(prometheus.BuildFQName(namespace, "work", "threads_total"), "Total number of work threads", []string{}, nil)
-	WorkThreadsLoadTotal  = prometheus.NewDesc(prometheus.BuildFQName(namespace, "work", "threads_load_total"), "Total of work threads load", []string{}, nil)
-	WorkThreadsDelayTotal = prometheus.NewDesc(prometheus.BuildFQName(namespace, "work", "threads_delay_total"), "Total of work threads delay", []string{}, nil)
+	WorkThreadsTotal      = newMetricDescr(namespace, "work_threads_total", "Total number of work threads", []string{})
+	WorkThreadsLoadTotal  = newMetricDescr(namespace, "work_threads_load_total", "Total of work threads load", []string{})
+	WorkThreadsDelayTotal = newMetricDescr(namespace, "work_threads_delay_total", "Total of work threads delay", []string{})
 
 	// statistics metrics
-	StatisticsBuffer                = prometheus.NewDesc(prometheus.BuildFQName(namespace, "statistics", "buffer"), "Statistics buffer", []string{}, nil)
-	StatisticsBufferLikeString      = prometheus.NewDesc(prometheus.BuildFQName(namespace, "statistics", "buffer_like_string"), "Statistics BufferLikeString", []string{}, nil)
-	StatisticsBufferList            = prometheus.NewDesc(prometheus.BuildFQName(namespace, "statistics", "buffer_list"), "Statistics BufferList", []string{}, nil)
-	StatisticsBufferRaw             = prometheus.NewDesc(prometheus.BuildFQName(namespace, "statistics", "buffer_raw"), "Statistics BufferRaw", []string{}, nil)
-	StatisticsFrame                 = prometheus.NewDesc(prometheus.BuildFQName(namespace, "statistics", "frame"), "Statistics Frame", []string{}, nil)
-	StatisticsFrameImp              = prometheus.NewDesc(prometheus.BuildFQName(namespace, "statistics", "frame_imp"), "Statistics FrameImp", []string{}, nil)
-	StatisticsMediaSource           = prometheus.NewDesc(prometheus.BuildFQName(namespace, "statistics", "media_source"), "Statistics MediaSource", []string{}, nil)
-	StatisticsMultiMediaSourceMuxer = prometheus.NewDesc(prometheus.BuildFQName(namespace, "statistics", "multi_media_source_muxer"), "Statistics MultiMediaSourceMuxer", []string{}, nil)
-	StatisticsRtmpPacket            = prometheus.NewDesc(prometheus.BuildFQName(namespace, "statistics", "rtmp_packet"), "Statistics RtmpPacket", []string{}, nil)
-	StatisticsRtpPacket             = prometheus.NewDesc(prometheus.BuildFQName(namespace, "statistics", "rtp_packet"), "Statistics RtpPacket", []string{}, nil)
-	StatisticsSocket                = prometheus.NewDesc(prometheus.BuildFQName(namespace, "statistics", "socket"), "Statistics Socket", []string{}, nil)
-	StatisticsTcpClient             = prometheus.NewDesc(prometheus.BuildFQName(namespace, "statistics", "tcp_client"), "Statistics TcpClient", []string{}, nil)
-	StatisticsTcpServer             = prometheus.NewDesc(prometheus.BuildFQName(namespace, "statistics", "tcp_server"), "Statistics TcpServer", []string{}, nil)
-	StatisticsTcpSession            = prometheus.NewDesc(prometheus.BuildFQName(namespace, "statistics", "tcp_session"), "Statistics TcpSession", []string{}, nil)
-	StatisticsUdpServer             = prometheus.NewDesc(prometheus.BuildFQName(namespace, "statistics", "udp_server"), "Statistics UdpServer", []string{}, nil)
-	StatisticsUdpSession            = prometheus.NewDesc(prometheus.BuildFQName(namespace, "statistics", "udp_session"), "Statistics UdpSession", []string{}, nil)
+	StatisticsBuffer                = newMetricDescr(namespace, "statistics_buffer", "Statistics buffer", []string{})
+	StatisticsBufferLikeString      = newMetricDescr(namespace, "statistics_buffer_like_string", "Statistics BufferLikeString", []string{})
+	StatisticsBufferList            = newMetricDescr(namespace, "statistics_buffer_list", "Statistics BufferList", []string{})
+	StatisticsBufferRaw             = newMetricDescr(namespace, "statistics_buffer_raw", "Statistics BufferRaw", []string{})
+	StatisticsFrame                 = newMetricDescr(namespace, "statistics_frame", "Statistics Frame", []string{})
+	StatisticsFrameImp              = newMetricDescr(namespace, "statistics_frame_imp", "Statistics FrameImp", []string{})
+	StatisticsMediaSource           = newMetricDescr(namespace, "statistics_media_source", "Statistics MediaSource", []string{})
+	StatisticsMultiMediaSourceMuxer = newMetricDescr(namespace, "statistics_multi_media_source_muxer", "Statistics MultiMediaSourceMuxer", []string{})
+	StatisticsRtmpPacket            = newMetricDescr(namespace, "statistics_rtmp_packet", "Statistics RtmpPacket", []string{})
+	StatisticsRtpPacket             = newMetricDescr(namespace, "statistics_rtp_packet", "Statistics RtpPacket", []string{})
+	StatisticsSocket                = newMetricDescr(namespace, "statistics_socket", "Statistics Socket", []string{})
+	StatisticsTcpClient             = newMetricDescr(namespace, "statistics_tcp_client", "Statistics TcpClient", []string{})
+	StatisticsTcpServer             = newMetricDescr(namespace, "statistics_tcp_server", "Statistics TcpServer", []string{})
+	StatisticsTcpSession            = newMetricDescr(namespace, "statistics_tcp_session", "Statistics TcpSession", []string{})
+	StatisticsUdpServer             = newMetricDescr(namespace, "statistics_udp_server", "Statistics UdpServer", []string{})
+	StatisticsUdpSession            = newMetricDescr(namespace, "statistics_udp_session", "Statistics UdpSession", []string{})
 
 	// server config metrics
-	ServerApiInfo   = prometheus.NewDesc(prometheus.BuildFQName(namespace, "server", "api_info"), "Server config about api", []string{"apiDebug", "defaultSnap", "downloadRoot", "secret", "snapRoot"}, nil)
-	ServerCluster   = prometheus.NewDesc(prometheus.BuildFQName(namespace, "server", "cluster_info"), "Server config about cluster", []string{"origin_url", "retry_Count", "timeout_sec"}, nil)
-	ServerFFmpeg    = prometheus.NewDesc(prometheus.BuildFQName(namespace, "server", "ffmpeg_info"), "Server config about ffmpeg", []string{"bin", "cmd", "log", "restart_sec", "snap"}, nil)
-	ServerGeneral   = prometheus.NewDesc(prometheus.BuildFQName(namespace, "server", "general_info"), "Server config about general", []string{"broadcast_player_count_changed", "check_nvidia_dev", "enableVhost", "enable_ffmpeg_log", "flowThreshold", "maxStreamWaitMS", "mediaServerId", "mergeWriteMS", "resetWhenRePlay", "streamNoneReaderDelayMS", "unready_frame_cache", "wait_add_track_ms", "wait_track_ready_ms"}, nil)
-	ServerHls       = prometheus.NewDesc(prometheus.BuildFQName(namespace, "server", "hls_info"), "Server config about hls", []string{"broadcastRecordTs", "deleteDelaySec", "fastRegister", "fileBufSize", "segDelay", "segKeep", "segNum", "segRetain"}, nil)
-	ServerHook      = prometheus.NewDesc(prometheus.BuildFQName(namespace, "server", "hook_info"), "Server config about hook", []string{"alive_interval", "enable", "on_flow_report", "on_http_access", "on_play", "on_publish", "on_record_mp4", "on_record_ts", "on_rtp_server_timeout", "on_rtsp_auth", "on_rtsp_realm", "on_send_rtp_stopped", "on_server_exited", "on_server_keepalive", "on_server_started", "on_shell_login", "on_stream_changed", "on_stream_none_reader", "on_stream_not_found", "retry", "retry_delay", "stream_changed_schemas", "timeoutSec"}, nil)
-	ServerHTTP      = prometheus.NewDesc(prometheus.BuildFQName(namespace, "server", "http_info"), "Server config about http", []string{"allow_cross_domains", "allow_ip_range", "charSet", "dirMenu", "forbidCacheSuffix", "forwarded_ip_header", "keepAliveSecond", "maxReqSize", "notFound", "port", "rootPath", "sendBufSize", "sslport", "virtualPath"}, nil)
-	ServerMulticast = prometheus.NewDesc(prometheus.BuildFQName(namespace, "server", "multicast_info"), "Server config about multicast", []string{"addrMax", "addrMin", "udpTTL"}, nil)
-	ServerProtocol  = prometheus.NewDesc(prometheus.BuildFQName(namespace, "server", "protocol_info"), "Server config about protocol", []string{"add_mute_audio", "auto_close", "continue_push_ms", "enable_audio", "enable_fmp4", "enable_hls", "enable_hls_fmp4", "enable_mp4", "enable_rtmp", "enable_rtsp", "enable_ts", "fmp4_demand", "hls_demand", "hls_save_path", "modify_stamp", "mp4_as_player", "mp4_max_second", "mp4_save_path", "paced_sender_ms", "rtmp_demand", "rtsp_demand", "ts_demand"}, nil)
-	ServerRecord    = prometheus.NewDesc(prometheus.BuildFQName(namespace, "server", "record_info"), "Server config about record", []string{"appName", "enableFmp4", "fastStart", "fileBufSize", "fileRepeat", "sampleMS"}, nil)
-	ServerRtx       = prometheus.NewDesc(prometheus.BuildFQName(namespace, "server", "rtx_info"), "Server config about rtx", []string{"externIP", "maxNackMS", "max_bitrate", "min_bitrate", "nackIntervalRatio", "nackMaxCount", "nackMaxMS", "nackMaxSize", "nackRtpSize", "port", "preferredCodecA", "preferredCodecV", "rembBitRate", "rtpCacheCheckInterval", "start_bitrate", "tcpPort", "timeoutSec"}, nil)
-	ServerRtmp      = prometheus.NewDesc(prometheus.BuildFQName(namespace, "server", "rtmp_info"), "Server config about rtmp", []string{"directProxy", "enhanced", "handshakeSecond", "keepAliveSecond", "port", "sslport"}, nil)
-	ServerRtp       = prometheus.NewDesc(prometheus.BuildFQName(namespace, "server", "rtp_info"), "Server config about rtp", []string{"audioMtuSize", "h264_stap_a", "lowLatency", "rtpMaxSize", "videoMtuSize"}, nil)
-	ServerRtpProxy  = prometheus.NewDesc(prometheus.BuildFQName(namespace, "server", "rtp_proxy_info"), "Server config about rtp_proxy", []string{"dumpDir", "gop_cache", "h264_pt", "h265_pt", "opus_pt", "port", "port_range", "ps_pt", "rtp_g711_dur_ms", "timeoutSec", "udp_recv_socket_buffer"}, nil)
-	ServerRtsp      = prometheus.NewDesc(prometheus.BuildFQName(namespace, "server", "rtsp_info"), "Server config about rtsp", []string{"authBasic", "directProxy", "handshakeSecond", "keepAliveSecond", "lowLatency", "port", "rtpTransportType", "sslport"}, nil)
-	ServerShell     = prometheus.NewDesc(prometheus.BuildFQName(namespace, "server", "shell_info"), "Server config about shell", []string{"maxReqSize", "port"}, nil)
-	ServerSrt       = prometheus.NewDesc(prometheus.BuildFQName(namespace, "server", "srt_info"), "Server config about srt", []string{"latencyMul", "pktBufSize", "port", "timeoutSec"}, nil)
+	ServerApiInfo   = newMetricDescr(namespace, "server_api_info", "Server config about api", []string{"apiDebug", "defaultSnap", "downloadRoot", "secret", "snapRoot"})
+	ServerCluster   = newMetricDescr(namespace, "server_cluster_info", "Server config about cluster", []string{"origin_url", "retry_Count", "timeout_sec"})
+	ServerFFmpeg    = newMetricDescr(namespace, "server_ffmpeg_info", "Server config about ffmpeg", []string{"bin", "cmd", "log", "restart_sec", "snap"})
+	ServerGeneral   = newMetricDescr(namespace, "server_general_info", "Server config about general", []string{"broadcast_player_count_changed", "check_nvidia_dev", "enableVhost", "enable_ffmpeg_log", "flowThreshold", "maxStreamWaitMS", "mediaServerId", "mergeWriteMS", "resetWhenRePlay", "streamNoneReaderDelayMS", "unready_frame_cache", "wait_add_track_ms", "wait_track_ready_ms"})
+	ServerHls       = newMetricDescr(namespace, "server_hls_info", "Server config about hls", []string{"broadcastRecordTs", "deleteDelaySec", "fastRegister", "fileBufSize", "segDelay", "segKeep", "segNum", "segRetain"})
+	ServerHook      = newMetricDescr(namespace, "server_hook_info", "Server config about hook", []string{"alive_interval", "enable", "on_flow_report", "on_http_access", "on_play", "on_publish", "on_record_mp4", "on_record_ts", "on_rtp_server_timeout", "on_rtsp_auth", "on_rtsp_realm", "on_send_rtp_stopped", "on_server_exited", "on_server_keepalive", "on_server_started", "on_shell_login", "on_stream_changed", "on_stream_none_reader", "on_stream_not_found", "retry", "retry_delay", "stream_changed_schemas", "timeoutSec"})
+	ServerHTTP      = newMetricDescr(namespace, "server_http_info", "Server config about http", []string{"allow_cross_domains", "allow_ip_range", "charSet", "dirMenu", "forbidCacheSuffix", "forwarded_ip_header", "keepAliveSecond", "maxReqSize", "notFound", "port", "rootPath", "sendBufSize", "sslport", "virtualPath"})
+	ServerMulticast = newMetricDescr(namespace, "server_multicast_info", "Server config about multicast", []string{"addrMax", "addrMin", "udpTTL"})
+	ServerProtocol  = newMetricDescr(namespace, "server_protocol_info", "Server config about protocol", []string{"add_mute_audio", "auto_close", "continue_push_ms", "enable_audio", "enable_fmp4", "enable_hls", "enable_hls_fmp4", "enable_mp4", "enable_rtmp", "enable_rtsp", "enable_ts", "fmp4_demand", "hls_demand", "hls_save_path", "modify_stamp", "mp4_as_player", "mp4_max_second", "mp4_save_path", "paced_sender_ms", "rtmp_demand", "rtsp_demand", "ts_demand"})
+	ServerRecord    = newMetricDescr(namespace, "server_record_info", "Server config about record", []string{"appName", "enableFmp4", "fastStart", "fileBufSize", "fileRepeat", "sampleMS"})
+	ServerRtx       = newMetricDescr(namespace, "server_rtx_info", "Server config about rtx", []string{"externIP", "maxNackMS", "max_bitrate", "min_bitrate", "nackIntervalRatio", "nackMaxCount", "nackMaxMS", "nackMaxSize", "nackRtpSize", "port", "preferredCodecA", "preferredCodecV", "rembBitRate", "rtpCacheCheckInterval", "start_bitrate", "tcpPort", "timeoutSec"})
+	ServerRtmp      = newMetricDescr(namespace, "server_rtmp_info", "Server config about rtmp", []string{"directProxy", "enhanced", "handshakeSecond", "keepAliveSecond", "port", "sslport"})
+	ServerRtp       = newMetricDescr(namespace, "server_rtp_info", "Server config about rtp", []string{"audioMtuSize", "h264_stap_a", "lowLatency", "rtpMaxSize", "videoMtuSize"})
+	ServerRtpProxy  = newMetricDescr(namespace, "server_rtp_proxy_info", "Server config about rtp_proxy", []string{"dumpDir", "gop_cache", "h264_pt", "h265_pt", "opus_pt", "port", "port_range", "ps_pt", "rtp_g711_dur_ms", "timeoutSec", "udp_recv_socket_buffer"})
+	ServerRtsp      = newMetricDescr(namespace, "server_rtsp_info", "Server config about rtsp", []string{"authBasic", "directProxy", "handshakeSecond", "keepAliveSecond", "lowLatency", "port", "rtpTransportType", "sslport"})
+	ServerShell     = newMetricDescr(namespace, "server_shell_info", "Server config about shell", []string{"maxReqSize", "port"})
+	ServerSrt       = newMetricDescr(namespace, "server_srt_info", "Server config about srt", []string{"latencyMul", "pktBufSize", "port", "timeoutSec"})
 
 	// session metrics
-	SessionInfo  = prometheus.NewDesc(prometheus.BuildFQName(namespace, "session", "session_info"), "Session info", []string{"id", "identifier", "local_ip", "local_port", "peer_ip", "peer_port", "typeid"}, nil)
-	SessionTotal = prometheus.NewDesc(prometheus.BuildFQName(namespace, "session", "total"), "Total number of sessions", []string{}, nil)
+	SessionInfo  = newMetricDescr(namespace, "session_info", "Session info", []string{"id", "identifier", "local_ip", "local_port", "peer_ip", "peer_port", "typeid"})
+	SessionTotal = newMetricDescr(namespace, "session_total", "Total number of sessions", []string{})
 
 	// stream metrics
-	StreamTotal       = prometheus.NewDesc(prometheus.BuildFQName(namespace, "stream", "total"), "Total number of streams", []string{}, nil)
-	StreamReaderCount = prometheus.NewDesc(prometheus.BuildFQName(namespace, "stream", "reader_count"), "Stream reader count", []string{"app", "stream", "schema", "vhost"}, nil)
-	SteamBandwidth    = prometheus.NewDesc(prometheus.BuildFQName(namespace, "stream", "bandwidth"), "Stream bandwidth", []string{"app", "stream", "schema", "vhost", "originType"}, nil)
+	StreamTotal       = newMetricDescr(namespace, "stream_total", "Total number of streams", []string{})
+	StreamReaderCount = newMetricDescr(namespace, "stream_reader_count", "Stream reader count", []string{"app", "stream", "schema", "vhost"})
+	SteamBandwidth    = newMetricDescr(namespace, "stream_bandwidth", "Stream bandwidth", []string{"app", "stream", "schema", "vhost", "originType"})
 
 	// rtp metrics
-	RtpServer      = prometheus.NewDesc(prometheus.BuildFQName(namespace, "rtp", "server"), "RTP server list", []string{"port", "stream_id"}, nil)
-	RtpServerTotal = prometheus.NewDesc(prometheus.BuildFQName(namespace, "rtp", "server_total"), "Total number of RTP servers", []string{}, nil)
+	RtpServer      = newMetricDescr(namespace, "rtp_server", "RTP server list", []string{"port", "stream_id"})
+	RtpServerTotal = newMetricDescr(namespace, "rtp_server_total", "Total number of RTP servers", []string{})
 )
 
 type Exporter struct {
@@ -138,11 +141,10 @@ type Exporter struct {
 	client http.Client
 	mutex  sync.RWMutex
 
-	up            prometheus.Gauge
-	totalScrapes  prometheus.Counter
-	serverMetrics map[int]metricInfo
-	logger        *logrus.Logger
-	options       Options
+	up           prometheus.Gauge
+	totalScrapes prometheus.Counter
+	logger       *logrus.Logger
+	options      Options
 
 	buildInfo BuildInfo
 }
@@ -311,9 +313,8 @@ func LoadCAFile(caFile string) (*x509.CertPool, error) {
 }
 
 func (e *Exporter) Describe(ch chan<- *prometheus.Desc) {
-	// todo:需要发送所有指标desc
-	for _, m := range e.serverMetrics {
-		ch <- m.Desc
+	for _, metric := range metrics {
+		ch <- metric
 	}
 	ch <- e.up.Desc()
 	ch <- e.totalScrapes.Desc()
@@ -622,8 +623,9 @@ var (
 	logFormat    = kingpin.Flag("zlm.log-format", "Log format, valid options are txt and json").Default(getEnv("ZLM_EXPORTER_LOG_FORMAT", "txt")).String()
 	logLevel     = kingpin.Flag("zlm.log-level", "Log level, valid options are debug, info, warn, error, fatal, panic").Default(getEnv("ZLM_EXPORTER_LOG_LEVEL", "info")).String()
 
-	tlsClientCertFile   = kingpin.Flag("tls.client-cert-file", "Path to the client certificate file").Default(getEnv("ZLM_EXPORTER_TLS_CLIENT_CERT_FILE", "")).String()
-	tlsClientKeyFile    = kingpin.Flag("tls.client-key-file", "Path to the client key file").Default(getEnv("ZLM_EXPORTER_TLS_CLIENT_KEY_FILE", "")).String()
+	tlsClientCertFile = kingpin.Flag("tls.client-cert-file", "Path to the client certificate file").Default(getEnv("ZLM_EXPORTER_TLS_CLIENT_CERT_FILE", "")).String()
+	tlsClientKeyFile  = kingpin.Flag("tls.client-key-file", "Path to the client key file").Default(getEnv("ZLM_EXPORTER_TLS_CLIENT_KEY_FILE", "")).String()
+
 	tlsCACertFile       = kingpin.Flag("tls.ca-cert-file", "Path to the CA certificate file").Default(getEnv("ZLM_EXPORTER_TLS_CA_CERT_FILE", "")).String()
 	tlsServerKeyFile    = kingpin.Flag("tls.server-key-file", "Path to the server key file").Default(getEnv("ZLM_EXPORTER_TLS_SERVER_KEY_FILE", "")).String()
 	tlsServerCertFile   = kingpin.Flag("tls.server-cert-file", "Path to the server certificate file").Default(getEnv("ZLM_EXPORTER_TLS_SERVER_CERT_FILE", "")).String()
