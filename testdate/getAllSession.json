@@ -1,0 +1,14 @@
+{
+  "code": 0,
+  "data": [
+    {
+      "id": "177-77",
+      "identifier": "177-77",
+      "local_ip": "127.0.0.1",
+      "local_port": 80,
+      "peer_ip": "127.0.0.1",
+      "peer_port": 55394,
+      "typeid": "mediakit::HttpSession"
+    }
+  ]
+}

@@ -10,7 +10,43 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/gin-gonic/gin"
 )
+
+func setup(t *testing.T) {
+	// 构建一个 zlmediakit echo server,用来提供 metrics 数据
+	r := gin.Default()
+	r.GET("index/api/version", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"code": 0, "data": "v1.0.0"})
+	})
+	r.GET("index/api/getApiList", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"code": 0, "data": []string{"api1", "api2"}})
+
+	})
+	r.GET("index/api/getThreadsLoad", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"code": 0, "data": 0.1})
+	})
+	r.GET("index/api/getWorkThreadsLoad", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"code": 0, "data": 0.2})
+	})
+	r.GET("index/api/getStatistic", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"code": 0, "data": gin.H{"total_bytes": 1024}})
+	})
+	r.GET("index/api/getServerConfig", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"code": 0, "data": gin.H{"server": "test_server"}})
+	})
+	r.GET("index/api/getAllSession", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"code": 0, "data": gin.H{"total": 10}})
+	})
+	r.GET("index/api/getMediaList", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"code": 0, "data": gin.H{"total": 10}})
+	})
+	r.GET("index/api/listRtpServer", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"code": 0, "data": gin.H{"total": 10}})
+	})
+	r.Run(":80")
+}
 
 func TestGetEnv(t *testing.T) {
 	tests := []struct {
