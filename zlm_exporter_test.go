@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"testing"
@@ -18,7 +20,7 @@ func setup(t *testing.T) {
 	// 构建一个 zlmediakit echo server,用来提供 metrics 数据
 	r := gin.Default()
 	r.GET("index/api/version", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"code": 0, "data": "v1.0.0"})
+		c.JSON(http.StatusOK, readTestData("version"))
 	})
 	r.GET("index/api/getApiList", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"code": 0, "data": []string{"api1", "api2"}})
@@ -46,6 +48,17 @@ func setup(t *testing.T) {
 		c.JSON(http.StatusOK, gin.H{"code": 0, "data": gin.H{"total": 10}})
 	})
 	r.Run(":80")
+}
+
+func readTestData(name string) map[string]any {
+
+	file, err := os.ReadFile(fmt.Sprintf("%s.json", name))
+	if err != nil {
+		log.Fatal(err)
+	}
+	var fileJson map[string]any
+	json.Unmarshal(file, &fileJson)
+	return fileJson
 }
 
 func TestGetEnv(t *testing.T) {

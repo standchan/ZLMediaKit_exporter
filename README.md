@@ -34,12 +34,31 @@ go get -u github.com/standchan/zlm_exporter
 
 ## Metrics
 
-| Metric Name     | Description                            |
-|-----------------|----------------------------------------|
-| `kafka_brokers` | Number of Brokers in the Kafka Cluster |
-| `kafka_topics`  | Number of Topics in the Kafka Cluster  |
-| `kafka_partitions`  | Number of Partitions in the Kafka Cluster|
-
+| Metric Name                               | Labels                          | Description                      |
+|-------------------------------------------|---------------------------------|----------------------------------|
+| `zlm_version_info`                        | branchName、buildTime、commitHash | Version info of ZLMediakit       |
+| `zlm_api_status`                          | endpoint                        | The status of API endpoint       |
+| `zlm_network_threads_total`               |                                 | Total number of network threads  |
+| `zlm_network_threads_load_total`          |                                 | Total of network threads load    |
+| `zlm_network_threads_delay_total`         |                                 | Total of network threads delay   |
+| `zlm_work_threads_total`                  |                                 | Total number of work threads     |
+| `zlm_work_threads_load_total`             |                                 | Total of work threads load       |
+| `zlm_work_threads_delay_total`            |                                 | Total of work threads delay      |
+| `zlm_statistics_buffer`                   |                                 | Statistics buffer                |
+| `zlm_statistics_buffer_like_string`       |                                 | Statistics BufferLikeString      |
+| `zlm_statistics_buffer_list`              |                                 | Statistics BufferList            |
+| `zlm_statistics_buffer_raw`               |                                 | Statistics BufferRaw             |
+| `zlm_statistics_frame`                    |                                 | Statistics Frame                 |
+| `zlm_statistics_frame_imp`                |                                 | Statistics FrameImp              |
+| `zlm_statistics_media_source`             |                                 | Statistics MediaSource           |
+| `zlm_statistics_multi_media_source_muxer` |                                 | Statistics MultiMediaSourceMuxer |
+| `zlm_statistics_rtp_packet`               |                                 | Statistics RtpPacket             |
+| `zlm_statistics_socket`                   |                                 | Statistics Socket                |
+| `zlm_statistics_tcp_client`               |                                 | Statistics TcpClient             |
+| `zlm_statistics_tcp_server`               |                                 | Statistics TcpServer             |
+| `zlm_statistics_tcp_session`              |                                 | Statistics TcpSession            |
+| `zlm_statistics_udp_server`               |                                 | Statistics UdpServer             |
+| `zlm_statistics_udp_session`              |                                 | Statistics UdpSession            |
 
 ## Contributing and reporting issues
 
