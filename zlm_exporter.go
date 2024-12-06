@@ -164,7 +164,7 @@ var (
 	SteamBandwidth    = newMetricDescr(namespace, "zlm_stream_bandwidth", "Stream bandwidth", []string{"app", "stream", "schema", "vhost", "originType"})
 
 	// rtp metrics
-	RtpServer      = newMetricDescr(namespace, "zlm_rtp_server", "RTP server list", []string{"port", "stream_id"})
+	RtpServerInfo  = newMetricDescr(namespace, "zlm_rtp_server", "RTP server info", []string{"port", "stream_id"})
 	RtpServerTotal = newMetricDescr(namespace, "zlm_rtp_server_total", "Total number of RTP servers", []string{})
 )
 
@@ -261,6 +261,36 @@ func (e *Exporter) CreateClientTLSConfig() *tls.Config {
 	return &tlsConfig
 }
 
+func (e *Exporter) CreateServerTLSConfig(certFile, keyFile, caCertFile, minVersionString string) (*tls.Config, error) {
+	// Verify that the initial key pair is accepted
+	_, err := LoadKeyPair(certFile, keyFile)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get minimum acceptable TLS version from the config string
+	minVersion, ok := tlsVersions[minVersionString]
+	if !ok {
+		return nil, fmt.Errorf("configured minimum TLS version unknown: '%s'", minVersionString)
+	}
+
+	tlsConfig := tls.Config{
+		MinVersion:     minVersion,
+		GetCertificate: GetServerCertificateFunc(certFile, keyFile),
+	}
+
+	if caCertFile != "" {
+		// Verify that the initial CA file is accepted when configured
+		_, err := LoadCAFile(caCertFile)
+		if err != nil {
+			return nil, err
+		}
+		tlsConfig.GetConfigForClient = GetConfigForClientFunc(certFile, keyFile, caCertFile)
+	}
+
+	return &tlsConfig, nil
+}
+
 var tlsVersions = map[string]uint16{
 	"TLS1.3": tls.VersionTLS13,
 	"TLS1.2": tls.VersionTLS12,
@@ -290,36 +320,6 @@ func GetConfigForClientFunc(certFile, keyFile, caCertFile string) func(*tls.Clie
 		}
 		return &tlsConfig, nil
 	}
-}
-
-func (e *Exporter) CreateServerTLSConfig(certFile, keyFile, caCertFile, minVersionString string) (*tls.Config, error) {
-	// Verify that the initial key pair is accepted
-	_, err := LoadKeyPair(certFile, keyFile)
-	if err != nil {
-		return nil, err
-	}
-
-	// Get minimum acceptable TLS version from the config string
-	minVersion, ok := tlsVersions[minVersionString]
-	if !ok {
-		return nil, fmt.Errorf("configured minimum TLS version unknown: '%s'", minVersionString)
-	}
-
-	tlsConfig := tls.Config{
-		MinVersion:     minVersion,
-		GetCertificate: GetServerCertificateFunc(certFile, keyFile),
-	}
-
-	if caCertFile != "" {
-		// Verify that the initial CA file is accepted when configured
-		_, err := LoadCAFile(caCertFile)
-		if err != nil {
-			return nil, err
-		}
-		tlsConfig.GetConfigForClient = GetConfigForClientFunc(certFile, keyFile, caCertFile)
-	}
-
-	return &tlsConfig, nil
 }
 
 // LoadKeyPair reads and parses a public/private key pair from a pair of files.
@@ -384,15 +384,31 @@ type APIResponseData interface {
 }
 
 type APIResponseGeneric[T APIResponseData] struct {
-	Code int `json:"code"`
-	Data T   `json:"data"`
+	Code int    `json:"code"`
+	Msg  string `json:"msg"`
+	Data T      `json:"data"`
+}
+
+func (e *Exporter) mustNewConstMetric(desc *prometheus.Desc, valueType prometheus.ValueType, value interface{}, labelValues ...string) prometheus.Metric {
+	switch vt := value.(type) {
+	case float64:
+		return prometheus.MustNewConstMetric(desc, valueType, vt, labelValues...)
+	case string:
+		valueFloat, err := strconv.ParseFloat(vt, 64)
+		if err == nil {
+			return prometheus.MustNewConstMetric(desc, valueType, valueFloat, labelValues...)
+		}
+		return prometheus.MustNewConstMetric(desc, valueType, 1, labelValues...)
+	default:
+		return nil
+	}
 }
 
 func (e *Exporter) fetchHTTP(ch chan<- prometheus.Metric, endpoint string, processFunc func(closer io.ReadCloser) error) {
 	uri := fmt.Sprintf("%s/%s", e.URI, endpoint)
 	parsedURL, err := url.Parse(uri)
 	if err != nil {
-		e.logger.Println("msg", "Error parsing URL", "err", err)
+		e.logger.Println("msg", "error parsing URL", "err", err)
 		return
 	}
 
@@ -406,13 +422,13 @@ func (e *Exporter) fetchHTTP(ch chan<- prometheus.Metric, endpoint string, proce
 
 	res, err := e.client.Do(req)
 	if err != nil {
-		e.logger.Println("msg", "Error scraping ZLMediaKit", "err", err)
+		e.logger.Println("msg", "error scraping ZLMediaKit", "err", err)
 		return
 	}
 	defer res.Body.Close()
 
 	if err = processFunc(res.Body); err != nil {
-		e.logger.Println("msg", "Error processing response", "err", err)
+		e.logger.Println("msg", "error processing response", "err", err)
 	}
 }
 
@@ -423,7 +439,7 @@ func (e *Exporter) extractZLMVersion(ch chan<- prometheus.Metric) {
 			return fmt.Errorf("error decoding JSON response: %w", err)
 		}
 		if apiResponse.Code != 0 {
-			return fmt.Errorf("unexpected API response code: %d", apiResponse.Code)
+			return fmt.Errorf("unexpected API response code: %d,reason: %s", apiResponse.Code, apiResponse.Msg)
 		}
 		data := apiResponse.Data
 		ch <- prometheus.MustNewConstMetric(ZLMediaKitInfo, prometheus.GaugeValue, 1, data["branchName"].(string), data["buildTime"].(string), data["commitHash"].(string))
@@ -431,6 +447,7 @@ func (e *Exporter) extractZLMVersion(ch chan<- prometheus.Metric) {
 	}
 	e.fetchHTTP(ch, "index/api/version", processFunc)
 }
+
 func (e *Exporter) extractAPIStatus(ch chan<- prometheus.Metric) {
 	processFunc := func(body io.ReadCloser) error {
 		var apiResponse APIResponseGeneric[[]string]
@@ -439,7 +456,7 @@ func (e *Exporter) extractAPIStatus(ch chan<- prometheus.Metric) {
 			return fmt.Errorf("error decoding JSON response: %w", err)
 		}
 		if apiResponse.Code != 0 {
-			return fmt.Errorf("unexpected API response code: %d", apiResponse.Code)
+			return fmt.Errorf("unexpected API response code: %d,reason: %s", apiResponse.Code, apiResponse.Msg)
 		}
 
 		data := apiResponse.Data
@@ -451,18 +468,19 @@ func (e *Exporter) extractAPIStatus(ch chan<- prometheus.Metric) {
 	}
 	e.fetchHTTP(ch, "index/api/getApiList", processFunc)
 }
+
 func (e *Exporter) extractNetworkThreads(ch chan<- prometheus.Metric) {
 	processFunc := func(body io.ReadCloser) error {
-		var threadsLoad APIResponseGeneric[APIResponseDataThreads]
-		if err := json.NewDecoder(body).Decode(&threadsLoad); err != nil {
+		var apiResponse APIResponseGeneric[APIResponseDataThreads]
+		if err := json.NewDecoder(body).Decode(&apiResponse); err != nil {
 			return fmt.Errorf("error decoding JSON response: %w", err)
 		}
-		if threadsLoad.Code != 0 {
-			return fmt.Errorf("unexpected API response code: %d", threadsLoad.Code)
+		if apiResponse.Code != 0 {
+			return fmt.Errorf("unexpected API response code: %d,reason: %s", apiResponse.Code, apiResponse.Msg)
 		}
 
 		var loadTotal, delayTotal, total float64
-		for _, data := range threadsLoad.Data {
+		for _, data := range apiResponse.Data {
 			loadTotal += data.Load
 			delayTotal += data.Delay
 			total++
@@ -474,17 +492,18 @@ func (e *Exporter) extractNetworkThreads(ch chan<- prometheus.Metric) {
 	}
 	e.fetchHTTP(ch, "index/api/getThreadsLoad", processFunc)
 }
+
 func (e *Exporter) extractWorkThreads(ch chan<- prometheus.Metric) {
 	processFunc := func(body io.ReadCloser) error {
-		var threadsLoad APIResponseGeneric[APIResponseDataThreads]
-		if err := json.NewDecoder(body).Decode(&threadsLoad); err != nil {
+		var apiResponse APIResponseGeneric[APIResponseDataThreads]
+		if err := json.NewDecoder(body).Decode(&apiResponse); err != nil {
 			return fmt.Errorf("error decoding JSON response: %w", err)
 		}
-		if threadsLoad.Code != 0 {
-			return fmt.Errorf("unexpected API response code: %d", threadsLoad.Code)
+		if apiResponse.Code != 0 {
+			return fmt.Errorf("unexpected API response code: %d,reason: %s", apiResponse.Code, apiResponse.Msg)
 		}
 		var loadTotal, delayTotal, total float64
-		for _, data := range threadsLoad.Data {
+		for _, data := range apiResponse.Data {
 			loadTotal += data.Load
 			delayTotal += data.Delay
 			total++
@@ -496,6 +515,7 @@ func (e *Exporter) extractWorkThreads(ch chan<- prometheus.Metric) {
 	}
 	e.fetchHTTP(ch, "index/api/getWorkThreadsLoad", processFunc)
 }
+
 func (e *Exporter) extractStatistics(ch chan<- prometheus.Metric) {
 	processFunc := func(body io.ReadCloser) error {
 		var apiResponse APIResponseGeneric[map[string]interface{}]
@@ -503,7 +523,7 @@ func (e *Exporter) extractStatistics(ch chan<- prometheus.Metric) {
 			return fmt.Errorf("error decoding JSON response: %w", err)
 		}
 		if apiResponse.Code != 0 {
-			return fmt.Errorf("unexpected API response code: %d", apiResponse.Code)
+			return fmt.Errorf("unexpected API response code: %d,reason: %s", apiResponse.Code, apiResponse.Msg)
 		}
 		data := apiResponse.Data
 		ch <- e.mustNewConstMetric(StatisticsBuffer, prometheus.GaugeValue, data["Buffer"])
@@ -527,21 +547,6 @@ func (e *Exporter) extractStatistics(ch chan<- prometheus.Metric) {
 	e.fetchHTTP(ch, "index/api/getStatistic", processFunc)
 }
 
-func (e *Exporter) mustNewConstMetric(desc *prometheus.Desc, valueType prometheus.ValueType, value interface{}, labelValues ...string) prometheus.Metric {
-	switch vt := value.(type) {
-	case float64:
-		return prometheus.MustNewConstMetric(desc, valueType, vt, labelValues...)
-	case string:
-		valueFloat, err := strconv.ParseFloat(vt, 64)
-		if err == nil {
-			return prometheus.MustNewConstMetric(desc, valueType, valueFloat, labelValues...)
-		}
-		return prometheus.MustNewConstMetric(desc, valueType, 1, labelValues...)
-	default:
-		return nil
-	}
-}
-
 // func (e *Exporter) extractServerConfig(ch chan<- prometheus.Metric) {
 // 	processFunc := func(body io.ReadCloser) error {
 // 		var apiResponse APIResponseGeneric[[]map[string]string]
@@ -551,17 +556,13 @@ func (e *Exporter) mustNewConstMetric(desc *prometheus.Desc, valueType prometheu
 // 		if apiResponse.Code != 0 {
 // 			return fmt.Errorf("unexpected API response code: %d", apiResponse.Code)
 // 		}
-
 // 		for _, v := range apiResponse.Data {
 // 			// mute api.secret
 // 			ch <- e.mustNewConstMetric(ServerConfigApiInfo, prometheus.GaugeValue, 1, v["api.apiDebug"], v["api.defaultSnap"], v["api.downloadRoot"], v["api.snapRoot"])
-
 // 			ch <- e.mustNewConstMetric(ServerConfigClusterOriginURL, prometheus.GaugeValue, 1, v["cluster.origin_url"])
 // 			ch <- e.mustNewConstMetric(ServerConfigClusterRetryCount, prometheus.GaugeValue, v["cluster.retry_Count"])
 // 			ch <- e.mustNewConstMetric(ServerConfigClusterTimeoutSec, prometheus.GaugeValue, v["cluster.timeoutSec"])
-
 // 			ch <- e.mustNewConstMetric(ServerConfigFFmpeg, prometheus.GaugeValue, 1, v["ffmpeg.bin"], v["ffmpeg.cmd"], v["ffmpeg.log"])
-
 // 			ch <- e.mustNewConstMetric(ServerConfigGeneralBroadcastPlayerCountChanged, prometheus.GaugeValue, v["general.broadcast_player_count_changed"])
 // 			ch <- e.mustNewConstMetric(ServerConfigGeneralCheckNvidiaDev, prometheus.GaugeValue, v["general.check_nvidia_dev"])
 // 			ch <- e.mustNewConstMetric(ServerConfigGeneralEnableFFmpegLog, prometheus.GaugeValue, v["general.enable_ffmpeg_log"])
@@ -575,7 +576,6 @@ func (e *Exporter) mustNewConstMetric(desc *prometheus.Desc, valueType prometheu
 // 			ch <- e.mustNewConstMetric(ServerConfigGeneralEnableVhost, prometheus.GaugeValue, v["general.enableVhost"])
 // 			ch <- e.mustNewConstMetric(ServerConfigGeneralFlowThreshold, prometheus.GaugeValue, v["general.flowThreshold"])
 // 			ch <- e.mustNewConstMetric(ServerConfigGeneralStreamNoneReaderDelayMS, prometheus.GaugeValue, v["general.streamNoneReaderDelayMS"])
-
 // 			ch <- e.mustNewConstMetric(ServerConfigHlsBroadcastRecordTs, prometheus.GaugeValue, v["hls.broadcastRecordTs"])
 // 			ch <- e.mustNewConstMetric(ServerConfigHlsDeleteDelaySec, prometheus.GaugeValue, v["hls.deleteDelaySec"])
 // 			ch <- e.mustNewConstMetric(ServerConfigHlsFastRegister, prometheus.GaugeValue, v["hls.fastRegister"])
@@ -585,7 +585,6 @@ func (e *Exporter) mustNewConstMetric(desc *prometheus.Desc, valueType prometheu
 // 			ch <- e.mustNewConstMetric(ServerConfigHlsSegKeep, prometheus.GaugeValue, v["hls.segKeep"])
 // 			ch <- e.mustNewConstMetric(ServerConfigHlsSegNum, prometheus.GaugeValue, v["hls.segNum"])
 // 			ch <- e.mustNewConstMetric(ServerConfigHlsSegRetain, prometheus.GaugeValue, v["hls.segRetain"])
-
 // 			ch <- e.mustNewConstMetric(ServerHTTP, prometheus.GaugeValue, 1, v["http.allow_cross_domains"], v["http.allow_ip_range"], v["http.charSet"], v["http.dirMenu"], v["http.forbidCacheSuffix"], v["http.forwarded_ip_header"], v["http.keepAliveSecond"], v["http.maxReqSize"], v["http.notFound"], v["http.port"], v["http.rootPath"], v["http.sendBufSize"], v["http.sslport"], v["http.virtualPath"])
 // 			ch <- e.mustNewConstMetric(ServerMulticast, prometheus.GaugeValue, 1, v["multicast.addrMax"], v["multicast.addrMin"], v["multicast.udpTTL"])
 // 			ch <- e.mustNewConstMetric(ServerProtocol, prometheus.GaugeValue, 1, v["protocol.add_mute_audio"], v["protocol.auto_close"], v["protocol.continue_push_ms"], v["protocol.enable_audio"], v["protocol.enable_fmp4"], v["protocol.enable_hls"], v["protocol.enable_hls_fmp4"], v["protocol.enable_mp4"], v["protocol.enable_rtmp"], v["protocol.enable_rtsp"], v["protocol.enable_ts"], v["protocol.fmp4_demand"], v["protocol.hls_demand"], v["protocol.hls_save_path"], v["protocol.modify_stamp"], v["protocol.mp4_as_player"], v["protocol.mp4_max_second"], v["protocol.mp4_save_path"], v["protocol.paced_sender_ms"], v["protocol.rtmp_demand"], v["protocol.rtsp_demand"], v["protocol.ts_demand"])
@@ -598,7 +597,6 @@ func (e *Exporter) mustNewConstMetric(desc *prometheus.Desc, valueType prometheu
 // 			ch <- e.mustNewConstMetric(ServerShell, prometheus.GaugeValue, 1, v["shell.maxReqSize"], v["shell.port"])
 // 			ch <- e.mustNewConstMetric(ServerSrt, prometheus.GaugeValue, 1, v["srt.latencyMul"], v["srt.pktBufSize"], v["srt.port"], v["srt.timeoutSec"])
 // 		}
-
 // 		return nil
 // 	}
 // 	e.fetchHTTP(ch, "index/api/getServerConfig", processFunc)
@@ -611,9 +609,9 @@ func (e *Exporter) extractSession(ch chan<- prometheus.Metric) {
 			return fmt.Errorf("error decoding JSON response: %w", err)
 		}
 		if apiResponse.Code != 0 {
-			return fmt.Errorf("unexpected API response code: %d", apiResponse.Code)
+			return fmt.Errorf("unexpected API response code: %d,reason: %s", apiResponse.Code, apiResponse.Msg)
 		}
-		for i, v := range apiResponse.Data {
+		for _, v := range apiResponse.Data {
 			id := fmt.Sprint(v["id"])
 			identifier := fmt.Sprint(v["identifier"])
 			localIP := fmt.Sprint(v["local_ip"])
@@ -621,14 +619,14 @@ func (e *Exporter) extractSession(ch chan<- prometheus.Metric) {
 			peerIP := fmt.Sprint(v["peer_ip"])
 			peerPort := fmt.Sprint(v["peer_port"])
 			typeID := fmt.Sprint(v["typeid"])
-			ch <- prometheus.MustNewConstMetric(SessionInfo, prometheus.GaugeValue, float64(i), id, identifier, localIP, localPort, peerIP, peerPort, typeID)
+			ch <- prometheus.MustNewConstMetric(SessionInfo, prometheus.GaugeValue, 1, id, identifier, localIP, localPort, peerIP, peerPort, typeID)
 		}
 		ch <- prometheus.MustNewConstMetric(SessionTotal, prometheus.GaugeValue, float64(len(apiResponse.Data)))
 		return nil
 	}
 	e.fetchHTTP(ch, "index/api/getAllSession", processFunc)
-
 }
+
 func (e *Exporter) extractStream(ch chan<- prometheus.Metric) {
 	processFunc := func(body io.ReadCloser) error {
 		var apiResponse APIResponseGeneric[[]map[string]interface{}]
@@ -636,28 +634,25 @@ func (e *Exporter) extractStream(ch chan<- prometheus.Metric) {
 			return fmt.Errorf("error decoding JSON response: %w", err)
 		}
 		if apiResponse.Code != 0 {
-			return fmt.Errorf("unexpected API response code: %d", apiResponse.Code)
+			return fmt.Errorf("unexpected API response code: %d,reason: %s", apiResponse.Code, apiResponse.Msg)
 		}
 
 		for _, v := range apiResponse.Data {
 			app := fmt.Sprint(v["app"])
 			stream := fmt.Sprint(v["stream"])
 			schema := fmt.Sprint(v["schema"])
-			readerCount, ok := v["totalReaderCount"].(float64)
+			readerCount, ok := v["readerCount"].(float64)
 			if !ok {
-				e.logger.Println("msg", "Error converting totalReaderCount to float64")
+				e.logger.Println("msg", "error converting readerCount to float64")
 				continue
-				// todo error handle
 			}
 			vhost := fmt.Sprint(v["vhost"])
 			originType := fmt.Sprint(v["originType"])
 			bytesSpeed, ok := v["bytesSpeed"].(float64)
 			if !ok {
-				e.logger.Println("msg", "Error converting bytesSpeed to float64")
+				e.logger.Println("msg", "error converting bytesSpeed to float64")
 				continue
-				// todo error handle
 			}
-			// todo 如果一个scrapy中，发送重复的数据，就会报错
 			ch <- prometheus.MustNewConstMetric(StreamReaderCount, prometheus.GaugeValue, readerCount, app, stream, schema, vhost)
 			ch <- prometheus.MustNewConstMetric(SteamBandwidth, prometheus.GaugeValue, bytesSpeed, app, stream, schema, vhost, originType)
 		}
@@ -665,8 +660,8 @@ func (e *Exporter) extractStream(ch chan<- prometheus.Metric) {
 		return nil
 	}
 	e.fetchHTTP(ch, "index/api/getMediaList", processFunc)
-
 }
+
 func (e *Exporter) extractRtp(ch chan<- prometheus.Metric) {
 	processFunc := func(body io.ReadCloser) error {
 		var apiResponse APIResponseGeneric[[]map[string]interface{}]
@@ -674,12 +669,12 @@ func (e *Exporter) extractRtp(ch chan<- prometheus.Metric) {
 			return fmt.Errorf("error decoding JSON response: %w", err)
 		}
 		if apiResponse.Code != 0 {
-			return fmt.Errorf("unexpected API response code: %d", apiResponse.Code)
+			return fmt.Errorf("unexpected API response code: %d,reason: %s", apiResponse.Code, apiResponse.Msg)
 		}
 		for _, v := range apiResponse.Data {
 			port := fmt.Sprint(v["port"])
 			streamID := fmt.Sprint(v["stream_id"])
-			ch <- prometheus.MustNewConstMetric(RtpServer, prometheus.GaugeValue, 1, port, streamID)
+			ch <- prometheus.MustNewConstMetric(RtpServerInfo, prometheus.GaugeValue, 1, port, streamID)
 		}
 		ch <- prometheus.MustNewConstMetric(RtpServerTotal, prometheus.GaugeValue, float64(len(apiResponse.Data)))
 		return nil
