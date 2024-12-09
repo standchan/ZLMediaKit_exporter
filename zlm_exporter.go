@@ -682,6 +682,28 @@ func (e *Exporter) extractRtp(ch chan<- prometheus.Metric) {
 	e.fetchHTTP(ch, "index/api/listRtpServer", processFunc)
 }
 
+func newLogger(logFormat, logLevel string) *logrus.Logger {
+	logger := logrus.New()
+
+	switch logFormat {
+	case "json":
+		logger.SetFormatter(&logrus.JSONFormatter{})
+	default:
+		logger.SetFormatter(&logrus.TextFormatter{})
+	}
+
+	level, err := logrus.ParseLevel(logLevel)
+	if err != nil {
+		logger.Fatal(err)
+	}
+	logger.SetLevel(level)
+
+	logger.Println("msg", "Starting zlm_exporter", "version", version.Info())
+	logger.Println("msg", "Build context", "context", version.BuildContext())
+
+	return logger
+}
+
 var (
 	webConfig    = webflag.AddFlags(kingpin.CommandLine, ":9101")
 	metricsPath  = kingpin.Flag("web.telemetry-path", "Path under which to expose metrics.").Default(getEnv("ZLM_EXPORTER_METRICS_PATH", "/metrics")).String()
@@ -690,10 +712,11 @@ var (
 	logFormat    = kingpin.Flag("zlm.log-format", "Log format, valid options are txt and json").Default(getEnv("ZLM_EXPORTER_LOG_FORMAT", "txt")).String()
 	logLevel     = kingpin.Flag("zlm.log-level", "Log level, valid options are debug, info, warn, error, fatal, panic").Default(getEnv("ZLM_EXPORTER_LOG_LEVEL", "info")).String()
 
+	tlsCACertFile = kingpin.Flag("tls.ca-cert-file", "Path to the CA certificate file").Default(getEnv("ZLM_EXPORTER_TLS_CA_CERT_FILE", "")).String()
+
 	tlsClientCertFile = kingpin.Flag("tls.client-cert-file", "Path to the client certificate file").Default(getEnv("ZLM_EXPORTER_TLS_CLIENT_CERT_FILE", "")).String()
 	tlsClientKeyFile  = kingpin.Flag("tls.client-key-file", "Path to the client key file").Default(getEnv("ZLM_EXPORTER_TLS_CLIENT_KEY_FILE", "")).String()
 
-	tlsCACertFile       = kingpin.Flag("tls.ca-cert-file", "Path to the CA certificate file").Default(getEnv("ZLM_EXPORTER_TLS_CA_CERT_FILE", "")).String()
 	tlsServerKeyFile    = kingpin.Flag("tls.server-key-file", "Path to the server key file").Default(getEnv("ZLM_EXPORTER_TLS_SERVER_KEY_FILE", "")).String()
 	tlsServerCertFile   = kingpin.Flag("tls.server-cert-file", "Path to the server certificate file").Default(getEnv("ZLM_EXPORTER_TLS_SERVER_CERT_FILE", "")).String()
 	tlsServerCaCertFile = kingpin.Flag("tls.server-ca-cert-file", "Path to the server CA certificate file").Default(getEnv("ZLM_EXPORTER_TLS_SERVER_CA_CERT_FILE", "")).String()
@@ -711,41 +734,26 @@ func main() {
 	kingpin.HelpFlag.Short('h')
 	kingpin.Parse()
 
-	logger := logrus.New()
-
-	switch *logFormat {
-	case "json":
-		logger.SetFormatter(&logrus.JSONFormatter{})
-	default:
-		logger.SetFormatter(&logrus.TextFormatter{})
-	}
-	level, err := logrus.ParseLevel(*logLevel)
-	if err != nil {
-		logger.Fatal(err)
-	}
-	logger.SetLevel(level)
-	logger.Println("msg", "Starting zlm_exporter", "version", version.Info())
-	logger.Println("msg", "Build context", "context", version.BuildContext())
+	log := newLogger(*logFormat, *logLevel)
 
 	option := Options{
 		ScrapeURI:           *zlmScrapeURI,
+		CaCertFile:          *tlsCACertFile,
 		ClientCertFile:      *tlsClientCertFile,
 		ClientKeyFile:       *tlsClientKeyFile,
 		ServerCertFile:      *tlsServerCertFile,
 		ServerKeyFile:       *tlsServerKeyFile,
-		CaCertFile:          *tlsCACertFile,
 		SkipTLSVerification: *skipTLSVerification,
 	}
 
-	exporter, err := NewExporter(logger, option)
+	exporter, err := NewExporter(log, option)
 	if err != nil {
-		logger.Println("msg", "Error creating exporter", "err", err)
-		os.Exit(1)
+		log.Fatalln("msg", "Error creating exporter", "err", err)
 	}
 
 	// Verify that initial client keypair and CA are accepted
 	if (*tlsClientCertFile != "") != (*tlsClientKeyFile != "") {
-		logger.Fatal("TLS client key file and cert file should both be present")
+		log.Fatalln("TLS client key file and cert file should both be present")
 	}
 
 	exporter.CreateClientTLSConfig()
@@ -755,15 +763,15 @@ func main() {
 	srv := &http.Server{}
 	go func() {
 		if *tlsServerCertFile != "" && *tlsServerKeyFile != "" {
-			logger.Debugf("Bind as TLS using cert %s and key %s", *tlsServerCertFile, *tlsServerKeyFile)
+			log.Debugf("Bind as TLS using cert %s and key %s", *tlsServerCertFile, *tlsServerKeyFile)
 
 			tlsConfig, err := exporter.CreateServerTLSConfig(*tlsServerCertFile, *tlsServerKeyFile, *tlsServerCaCertFile, *tlsServerMinVersion)
 			if err != nil {
-				logger.Fatal(err)
+				log.Fatalln(err)
 			}
 			srv.TLSConfig = tlsConfig
 			if err := web.ListenAndServe(srv, webConfig, promlog.New(promlogConfig)); err != nil {
-				logger.Fatal("msg", "Error starting HTTP server", "err", err)
+				log.Fatalln("msg", "Error starting HTTP server", "err", err)
 			}
 		}
 	}()
@@ -773,16 +781,16 @@ func main() {
 
 	go func() {
 		_quit := <-quit
-		logger.Infof("Received %s signal, exiting", _quit.String())
+		log.Infof("Received %s signal, exiting\n", _quit.String())
 
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
 
 		// Shutdown zlm_exporter gracefully
 		if err := srv.Shutdown(ctx); err != nil {
-			logger.Fatalf("zlm_exporter shutdown failed: %v", err)
+			log.Fatalf("zlm_exporter shutdown failed: %v", err)
 		}
-		logger.Infof("zlm_exporter shut down gracefully")
+		log.Infoln("zlm_exporter shut down gracefully")
 	}()
 
 	<-quit
