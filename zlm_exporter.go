@@ -76,7 +76,6 @@ var (
 	ApiStatus      = newMetricDescr(namespace, "zlm_api_status", "The status of API endpoint", []string{"endpoint"})
 
 	// network threads metric
-	// todo Threads指标可能用constLabels更好？
 	NetworkThreadsTotal      = newMetricDescr(namespace, "zlm_network_threads_total", "Total number of network threads", []string{})
 	NetworkThreadsLoadTotal  = newMetricDescr(namespace, "zlm_network_threads_load_total", "Total of network threads load", []string{})
 	NetworkThreadsDelayTotal = newMetricDescr(namespace, "zlm_network_threads_delay_total", "Total of network threads delay", []string{})
@@ -137,7 +136,6 @@ var (
 	ServerConfigHlsSegNum            = newMetricDescr(namespace, "zlm_server_config_hls_seg_num", "Server config about hls seg num", []string{})
 	ServerConfigHlsSegRetain         = newMetricDescr(namespace, "zlm_server_config_hls_seg_retain", "Server config about hls seg retain", []string{})
 
-	// todo:secrets metrci 感觉可以隐藏
 	// ServerConfigHookAdminParams = newMetricDescr(namespace, "zlm_server_config_hook_admin_params", "Server config about hook admin params", []string{})
 	ServerConfigHookEnable = newMetricDescr(namespace, "zlm_server_config_hook_enable", "Server config about hook enable", []string{})
 
