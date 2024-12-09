@@ -768,10 +768,11 @@ func main() {
 				log.Fatalln(err)
 			}
 			srv.TLSConfig = tlsConfig
-			if err := web.ListenAndServe(srv, webConfig, promlog.New(promlogConfig)); err != nil {
-				log.Fatalln("msg", "Error starting HTTP server", "err", err)
-			}
 		}
+		if err := web.ListenAndServe(srv, webConfig, promlog.New(promlogConfig)); err != nil {
+			log.Fatalln("msg", "Error starting HTTP server", "err", err)
+		}
+		log.Infoln("zlm_exporter started successfully")
 	}()
 
 	quit := make(chan os.Signal, 1)
@@ -788,7 +789,7 @@ func main() {
 		if err := srv.Shutdown(ctx); err != nil {
 			log.Fatalf("zlm_exporter shutdown failed: %v", err)
 		}
-		log.Infoln("zlm_exporter shut down gracefully")
+		log.Infoln("zlm_exporter shutdown gracefully")
 	}()
 
 	<-quit
