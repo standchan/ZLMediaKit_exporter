@@ -311,7 +311,7 @@ func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 
 func (e *Exporter) scrape(ch chan<- prometheus.Metric) (up float64) {
 	e.totalScrapes.Inc()
-	e.extractZLMVersion(ch)
+	e.extractVersion(ch)
 	e.extractAPIStatus(ch)
 	e.extractNetworkThreads(ch)
 	e.extractWorkThreads(ch)
@@ -380,7 +380,7 @@ func (e *Exporter) fetchHTTP(ch chan<- prometheus.Metric, endpoint string, proce
 	}
 }
 
-func (e *Exporter) extractZLMVersion(ch chan<- prometheus.Metric) {
+func (e *Exporter) extractVersion(ch chan<- prometheus.Metric) {
 	processFunc := func(body io.ReadCloser) error {
 		var apiResponse APIResponseGeneric[map[string]interface{}]
 		if err := json.NewDecoder(body).Decode(&apiResponse); err != nil {
@@ -630,10 +630,13 @@ func main() {
 	log := newLogger(*logFormat, *logLevel)
 
 	option := Options{
-		ScrapeURI:           *zlmScrapeURI,
-		CaCertFile:          *tlsCACertFile,
-		ClientCertFile:      *tlsClientCertFile,
-		ClientKeyFile:       *tlsClientKeyFile,
+		ScrapeURI: *zlmScrapeURI,
+
+		CaCertFile: *tlsCACertFile,
+
+		ClientCertFile: *tlsClientCertFile,
+		ClientKeyFile:  *tlsClientKeyFile,
+
 		ServerCertFile:      *tlsServerCertFile,
 		ServerKeyFile:       *tlsServerKeyFile,
 		SkipTLSVerification: *skipTLSVerification,
