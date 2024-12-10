@@ -72,98 +72,49 @@ func newMetricDescr(namespace string, metricName string, docString string, label
 }
 
 var (
-	ZLMediaKitInfo = newMetricDescr(namespace, "zlm_version_info", "ZLMediaKit version info.", []string{"branchName", "buildTime", "commitHash"})
-	ApiStatus      = newMetricDescr(namespace, "zlm_api_status", "The status of API endpoint", []string{"endpoint"})
+	ZLMediaKitInfo = newMetricDescr(namespace, "version_info", "ZLMediaKit version info.", []string{"branchName", "buildTime", "commitHash"})
+	ApiStatus      = newMetricDescr(namespace, "api_status", "The status of API endpoint", []string{"endpoint"})
 
 	// network threads metric
-	NetworkThreadsTotal      = newMetricDescr(namespace, "zlm_network_threads_total", "Total number of network threads", []string{})
-	NetworkThreadsLoadTotal  = newMetricDescr(namespace, "zlm_network_threads_load_total", "Total of network threads load", []string{})
-	NetworkThreadsDelayTotal = newMetricDescr(namespace, "zlm_network_threads_delay_total", "Total of network threads delay", []string{})
+	NetworkThreadsTotal      = newMetricDescr(namespace, "network_threads_total", "Total number of network threads", []string{})
+	NetworkThreadsLoadTotal  = newMetricDescr(namespace, "network_threads_load_total", "Total of network threads load", []string{})
+	NetworkThreadsDelayTotal = newMetricDescr(namespace, "network_threads_delay_total", "Total of network threads delay", []string{})
 
 	// work threads metrics
-	WorkThreadsTotal      = newMetricDescr(namespace, "zlm_work_threads_total", "Total number of work threads", []string{})
-	WorkThreadsLoadTotal  = newMetricDescr(namespace, "zlm_work_threads_load_total", "Total of work threads load", []string{})
-	WorkThreadsDelayTotal = newMetricDescr(namespace, "zlm_work_threads_delay_total", "Total of work threads delay", []string{})
+	WorkThreadsTotal      = newMetricDescr(namespace, "work_threads_total", "Total number of work threads", []string{})
+	WorkThreadsLoadTotal  = newMetricDescr(namespace, "work_threads_load_total", "Total of work threads load", []string{})
+	WorkThreadsDelayTotal = newMetricDescr(namespace, "work_threads_delay_total", "Total of work threads delay", []string{})
 
 	// statistics metrics
-	StatisticsBuffer                = newMetricDescr(namespace, "zlm_statistics_buffer", "Statistics buffer", []string{})
-	StatisticsBufferLikeString      = newMetricDescr(namespace, "zlm_statistics_buffer_like_string", "Statistics BufferLikeString", []string{})
-	StatisticsBufferList            = newMetricDescr(namespace, "zlm_statistics_buffer_list", "Statistics BufferList", []string{})
-	StatisticsBufferRaw             = newMetricDescr(namespace, "zlm_statistics_buffer_raw", "Statistics BufferRaw", []string{})
-	StatisticsFrame                 = newMetricDescr(namespace, "zlm_statistics_frame", "Statistics Frame", []string{})
-	StatisticsFrameImp              = newMetricDescr(namespace, "zlm_statistics_frame_imp", "Statistics FrameImp", []string{})
-	StatisticsMediaSource           = newMetricDescr(namespace, "zlm_statistics_media_source", "Statistics MediaSource", []string{})
-	StatisticsMultiMediaSourceMuxer = newMetricDescr(namespace, "zlm_statistics_multi_media_source_muxer", "Statistics MultiMediaSourceMuxer", []string{})
-	StatisticsRtmpPacket            = newMetricDescr(namespace, "zlm_statistics_rtmp_packet", "Statistics RtmpPacket", []string{})
-	StatisticsRtpPacket             = newMetricDescr(namespace, "zlm_statistics_rtp_packet", "Statistics RtpPacket", []string{})
-	StatisticsSocket                = newMetricDescr(namespace, "zlm_statistics_socket", "Statistics Socket", []string{})
-	StatisticsTcpClient             = newMetricDescr(namespace, "zlm_statistics_tcp_client", "Statistics TcpClient", []string{})
-	StatisticsTcpServer             = newMetricDescr(namespace, "zlm_statistics_tcp_server", "Statistics TcpServer", []string{})
-	StatisticsTcpSession            = newMetricDescr(namespace, "zlm_statistics_tcp_session", "Statistics TcpSession", []string{})
-	StatisticsUdpServer             = newMetricDescr(namespace, "zlm_statistics_udp_server", "Statistics UdpServer", []string{})
-	StatisticsUdpSession            = newMetricDescr(namespace, "zlm_statistics_udp_session", "Statistics UdpSession", []string{})
-
-	// server config metrics
-	ServerConfigApiInfo = newMetricDescr(namespace, "zlm_server_config_api_info", "Server config about api", []string{"apiDebug", "defaultSnap", "downloadRoot", "snapRoot"})
-
-	ServerConfigClusterOriginURL  = newMetricDescr(namespace, "zlm_server_config_cluster_origin_url", "Server config about cluster origin url", []string{"origin_url"})
-	ServerConfigClusterRetryCount = newMetricDescr(namespace, "zlm_server_config_cluster_retry_count", "Server config about cluster retry count", []string{})
-	ServerConfigClusterTimeoutSec = newMetricDescr(namespace, "zlm_server_config_cluster_timeout_sec", "Server config about cluster timeout sec", []string{})
-
-	ServerConfigFFmpeg = newMetricDescr(namespace, "zlm_server_config_ffmpeg_info", "Server config about ffmpeg", []string{"bin", "cmd", "log"})
-
-	ServerConfigGeneralBroadcastPlayerCountChanged = newMetricDescr(namespace, "zlm_server_config_general_broadcast_player_count_changed", "Server config about general broadcast player count changed", []string{})
-	ServerConfigGeneralCheckNvidiaDev              = newMetricDescr(namespace, "zlm_server_config_general_check_nvidia_dev", "Server config about general check nvidia dev", []string{})
-	ServerConfigGeneralEnableVhost                 = newMetricDescr(namespace, "zlm_server_config_general_enable_vhost", "Server config about general enable vhost", []string{})
-	ServerConfigGeneralEnableFFmpegLog             = newMetricDescr(namespace, "zlm_server_config_general_enable_ffmpeg_log", "Server config about general enable ffmpeg log", []string{})
-	ServerConfigGeneralFlowThreshold               = newMetricDescr(namespace, "zlm_server_config_general_flow_threshold", "Server config about general flow threshold", []string{})
-	ServerConfigGeneralMaxStreamWaitMS             = newMetricDescr(namespace, "zlm_server_config_general_max_stream_wait_ms", "Server config about general max stream wait ms", []string{})
-	ServerConfigGeneralMediaServerId               = newMetricDescr(namespace, "zlm_server_config_general_media_server_id", "Server config about general media server id", []string{})
-	ServerConfigGeneralMergeWriteMS                = newMetricDescr(namespace, "zlm_server_config_general_merge_write_ms", "Server config about general merge write ms", []string{})
-	ServerConfigGeneralResetWhenRePlay             = newMetricDescr(namespace, "zlm_server_config_general_reset_when_re_play", "Server config about general reset when re play", []string{})
-	ServerConfigGeneralStreamNoneReaderDelayMS     = newMetricDescr(namespace, "zlm_server_config_general_stream_none_reader_delay_ms", "Server config about general stream none reader delay ms", []string{})
-	ServerConfigGeneralUnreadyFrameCache           = newMetricDescr(namespace, "zlm_server_config_general_unready_frame_cache", "Server config about general unready frame cache", []string{})
-	ServerConfigGeneralWaitAddTrackMS              = newMetricDescr(namespace, "zlm_server_config_general_wait_add_track_ms", "Server config about general wait add track ms", []string{})
-	ServerConfigGeneralWaitTrackReadyMS            = newMetricDescr(namespace, "zlm_server_config_general_wait_track_ready_ms", "Server config about general wait track ready ms", []string{})
-
-	ServerConfigHlsBroadcastRecordTs = newMetricDescr(namespace, "zlm_server_config_hls_broadcast_record_ts", "Server config about hls broadcast record ts", []string{})
-	ServerConfigHlsDeleteDelaySec    = newMetricDescr(namespace, "zlm_server_config_hls_delete_delay_sec", "Server config about hls delete delay sec", []string{})
-	ServerConfigHlsFastRegister      = newMetricDescr(namespace, "zlm_server_config_hls_fast_register", "Server config about hls fast register", []string{})
-	ServerConfigHlsFileBufSize       = newMetricDescr(namespace, "zlm_server_config_hls_file_buf_size", "Server config about hls file buf size", []string{})
-	ServerConfigHlsSegDelay          = newMetricDescr(namespace, "zlm_server_config_hls_seg_delay", "Server config about hls seg delay", []string{})
-	ServerConfigHlsSegDur            = newMetricDescr(namespace, "zlm_server_config_hls_seg_dur", "Server config about hls seg dur", []string{})
-	ServerConfigHlsSegKeep           = newMetricDescr(namespace, "zlm_server_config_hls_seg_keep", "Server config about hls seg keep", []string{})
-	ServerConfigHlsSegNum            = newMetricDescr(namespace, "zlm_server_config_hls_seg_num", "Server config about hls seg num", []string{})
-	ServerConfigHlsSegRetain         = newMetricDescr(namespace, "zlm_server_config_hls_seg_retain", "Server config about hls seg retain", []string{})
-
-	// ServerConfigHookAdminParams = newMetricDescr(namespace, "zlm_server_config_hook_admin_params", "Server config about hook admin params", []string{})
-	ServerConfigHookEnable = newMetricDescr(namespace, "zlm_server_config_hook_enable", "Server config about hook enable", []string{})
-
-	ServerHttpSendBufSize = newMetricDescr(namespace, "zlm_server_config_http_send_buf_size", "Server config about http send buf size", []string{})
-	ServerHTTP            = newMetricDescr(namespace, "zlm_server_config_http_info", "Server config about http", []string{"allow_cross_domains", "allow_ip_range", "charSet", "dirMenu", "forbidCacheSuffix", "forwarded_ip_header", "keepAliveSecond", "maxReqSize", "notFound", "port", "rootPath", "sendBufSize", "sslport", "virtualPath"})
-	ServerMulticast       = newMetricDescr(namespace, "zlm_server_config_multicast_info", "Server config about multicast", []string{"addrMax", "addrMin", "udpTTL"})
-	ServerProtocol        = newMetricDescr(namespace, "zlm_server_config_protocol_info", "Server config about protocol", []string{"add_mute_audio", "auto_close", "continue_push_ms", "enable_audio", "enable_fmp4", "enable_hls", "enable_hls_fmp4", "enable_mp4", "enable_rtmp", "enable_rtsp", "enable_ts", "fmp4_demand", "hls_demand", "hls_save_path", "modify_stamp", "mp4_as_player", "mp4_max_second", "mp4_save_path", "paced_sender_ms", "rtmp_demand", "rtsp_demand", "ts_demand"})
-	ServerRecord          = newMetricDescr(namespace, "zlm_server_config_record_info", "Server config about record", []string{"appName", "enableFmp4", "fastStart", "fileBufSize", "fileRepeat", "sampleMS"})
-	ServerRtx             = newMetricDescr(namespace, "zlm_server_config_rtx_info", "Server config about rtx", []string{"externIP", "maxNackMS", "max_bitrate", "min_bitrate", "nackIntervalRatio", "nackMaxCount", "nackMaxMS", "nackMaxSize", "nackRtpSize", "port", "preferredCodecA", "preferredCodecV", "rembBitRate", "rtpCacheCheckInterval", "start_bitrate", "tcpPort", "timeoutSec"})
-	ServerRtmp            = newMetricDescr(namespace, "zlm_server_config_rtmp_info", "Server config about rtmp", []string{"directProxy", "enhanced", "handshakeSecond", "keepAliveSecond", "port", "sslport"})
-	ServerRtp             = newMetricDescr(namespace, "zlm_server_config_rtp_info", "Server config about rtp", []string{"audioMtuSize", "h264_stap_a", "lowLatency", "rtpMaxSize", "videoMtuSize"})
-	ServerRtpProxy        = newMetricDescr(namespace, "zlm_server_config_rtp_proxy_info", "Server config about rtp_proxy", []string{"dumpDir", "gop_cache", "h264_pt", "h265_pt", "opus_pt", "port", "port_range", "ps_pt", "rtp_g711_dur_ms", "timeoutSec", "udp_recv_socket_buffer"})
-	ServerRtsp            = newMetricDescr(namespace, "zlm_server_config_rtsp_info", "Server config about rtsp", []string{"authBasic", "directProxy", "handshakeSecond", "keepAliveSecond", "lowLatency", "port", "rtpTransportType", "sslport"})
-	ServerShell           = newMetricDescr(namespace, "zlm_server_config_shell_info", "Server config about shell", []string{"maxReqSize", "port"})
-	ServerSrt             = newMetricDescr(namespace, "zlm_server_config_srt_info", "Server config about srt", []string{"latencyMul", "pktBufSize", "port", "timeoutSec"})
+	StatisticsBuffer                = newMetricDescr(namespace, "statistics_buffer", "Statistics buffer", []string{})
+	StatisticsBufferLikeString      = newMetricDescr(namespace, "statistics_buffer_like_string", "Statistics BufferLikeString", []string{})
+	StatisticsBufferList            = newMetricDescr(namespace, "statistics_buffer_list", "Statistics BufferList", []string{})
+	StatisticsBufferRaw             = newMetricDescr(namespace, "statistics_buffer_raw", "Statistics BufferRaw", []string{})
+	StatisticsFrame                 = newMetricDescr(namespace, "statistics_frame", "Statistics Frame", []string{})
+	StatisticsFrameImp              = newMetricDescr(namespace, "statistics_frame_imp", "Statistics FrameImp", []string{})
+	StatisticsMediaSource           = newMetricDescr(namespace, "statistics_media_source", "Statistics MediaSource", []string{})
+	StatisticsMultiMediaSourceMuxer = newMetricDescr(namespace, "statistics_multi_media_source_muxer", "Statistics MultiMediaSourceMuxer", []string{})
+	StatisticsRtmpPacket            = newMetricDescr(namespace, "statistics_rtmp_packet", "Statistics RtmpPacket", []string{})
+	StatisticsRtpPacket             = newMetricDescr(namespace, "statistics_rtp_packet", "Statistics RtpPacket", []string{})
+	StatisticsSocket                = newMetricDescr(namespace, "statistics_socket", "Statistics Socket", []string{})
+	StatisticsTcpClient             = newMetricDescr(namespace, "statistics_tcp_client", "Statistics TcpClient", []string{})
+	StatisticsTcpServer             = newMetricDescr(namespace, "statistics_tcp_server", "Statistics TcpServer", []string{})
+	StatisticsTcpSession            = newMetricDescr(namespace, "statistics_tcp_session", "Statistics TcpSession", []string{})
+	StatisticsUdpServer             = newMetricDescr(namespace, "statistics_udp_server", "Statistics UdpServer", []string{})
+	StatisticsUdpSession            = newMetricDescr(namespace, "statistics_udp_session", "Statistics UdpSession", []string{})
 
 	// session metrics
-	SessionInfo  = newMetricDescr(namespace, "zlm_session_info", "Session info", []string{"id", "identifier", "local_ip", "local_port", "peer_ip", "peer_port", "typeid"})
-	SessionTotal = newMetricDescr(namespace, "zlm_session_total", "Total number of sessions", []string{})
+	SessionInfo  = newMetricDescr(namespace, "session_info", "Session info", []string{"id", "identifier", "local_ip", "local_port", "peer_ip", "peer_port", "typeid"})
+	SessionTotal = newMetricDescr(namespace, "session_total", "Total number of sessions", []string{})
 
 	// stream metrics
-	StreamTotal       = newMetricDescr(namespace, "zlm_stream_total", "Total number of streams", []string{})
-	StreamReaderCount = newMetricDescr(namespace, "zlm_stream_reader_count", "Stream reader count", []string{"app", "stream", "schema", "vhost"})
-	SteamBandwidth    = newMetricDescr(namespace, "zlm_stream_bandwidth", "Stream bandwidth", []string{"app", "stream", "schema", "vhost", "originType"})
+	StreamTotal       = newMetricDescr(namespace, "stream_total", "Total number of streams", []string{})
+	StreamReaderCount = newMetricDescr(namespace, "stream_reader_count", "Stream reader count", []string{"app", "stream", "schema", "vhost"})
+	SteamBandwidth    = newMetricDescr(namespace, "stream_bandwidth", "Stream bandwidth", []string{"app", "stream", "schema", "vhost", "originType"})
 
 	// rtp metrics
-	RtpServerInfo  = newMetricDescr(namespace, "zlm_rtp_server", "RTP server info", []string{"port", "stream_id"})
-	RtpServerTotal = newMetricDescr(namespace, "zlm_rtp_server_total", "Total number of RTP servers", []string{})
+	RtpServerInfo  = newMetricDescr(namespace, "rtp_server", "RTP server info", []string{"port", "stream_id"})
+	RtpServerTotal = newMetricDescr(namespace, "rtp_server_total", "Total number of RTP servers", []string{})
 )
 
 type Exporter struct {
@@ -365,7 +316,6 @@ func (e *Exporter) scrape(ch chan<- prometheus.Metric) (up float64) {
 	e.extractNetworkThreads(ch)
 	e.extractWorkThreads(ch)
 	e.extractStatistics(ch)
-	// e.extractServerConfig(ch)
 	e.extractSession(ch)
 	e.extractStream(ch)
 	e.extractRtp(ch)
@@ -544,61 +494,6 @@ func (e *Exporter) extractStatistics(ch chan<- prometheus.Metric) {
 	}
 	e.fetchHTTP(ch, "index/api/getStatistic", processFunc)
 }
-
-// func (e *Exporter) extractServerConfig(ch chan<- prometheus.Metric) {
-// 	processFunc := func(body io.ReadCloser) error {
-// 		var apiResponse APIResponseGeneric[[]map[string]string]
-// 		if err := json.NewDecoder(body).Decode(&apiResponse); err != nil {
-// 			return fmt.Errorf("error decoding JSON response: %w", err)
-// 		}
-// 		if apiResponse.Code != 0 {
-// 			return fmt.Errorf("unexpected API response code: %d", apiResponse.Code)
-// 		}
-// 		for _, v := range apiResponse.Data {
-// 			// mute api.secret
-// 			ch <- e.mustNewConstMetric(ServerConfigApiInfo, prometheus.GaugeValue, 1, v["api.apiDebug"], v["api.defaultSnap"], v["api.downloadRoot"], v["api.snapRoot"])
-// 			ch <- e.mustNewConstMetric(ServerConfigClusterOriginURL, prometheus.GaugeValue, 1, v["cluster.origin_url"])
-// 			ch <- e.mustNewConstMetric(ServerConfigClusterRetryCount, prometheus.GaugeValue, v["cluster.retry_Count"])
-// 			ch <- e.mustNewConstMetric(ServerConfigClusterTimeoutSec, prometheus.GaugeValue, v["cluster.timeoutSec"])
-// 			ch <- e.mustNewConstMetric(ServerConfigFFmpeg, prometheus.GaugeValue, 1, v["ffmpeg.bin"], v["ffmpeg.cmd"], v["ffmpeg.log"])
-// 			ch <- e.mustNewConstMetric(ServerConfigGeneralBroadcastPlayerCountChanged, prometheus.GaugeValue, v["general.broadcast_player_count_changed"])
-// 			ch <- e.mustNewConstMetric(ServerConfigGeneralCheckNvidiaDev, prometheus.GaugeValue, v["general.check_nvidia_dev"])
-// 			ch <- e.mustNewConstMetric(ServerConfigGeneralEnableFFmpegLog, prometheus.GaugeValue, v["general.enable_ffmpeg_log"])
-// 			ch <- e.mustNewConstMetric(ServerConfigGeneralMaxStreamWaitMS, prometheus.GaugeValue, v["general.maxStreamWaitMS"])
-// 			ch <- e.mustNewConstMetric(ServerConfigGeneralMediaServerId, prometheus.GaugeValue, 1, v["general.mediaServerId"])
-// 			ch <- e.mustNewConstMetric(ServerConfigGeneralMergeWriteMS, prometheus.GaugeValue, v["general.mergeWriteMS"])
-// 			ch <- e.mustNewConstMetric(ServerConfigGeneralResetWhenRePlay, prometheus.GaugeValue, v["general.resetWhenRePlay"])
-// 			ch <- e.mustNewConstMetric(ServerConfigGeneralUnreadyFrameCache, prometheus.GaugeValue, v["general.unready_frame_cache"])
-// 			ch <- e.mustNewConstMetric(ServerConfigGeneralWaitAddTrackMS, prometheus.GaugeValue, v["general.wait_add_track_ms"])
-// 			ch <- e.mustNewConstMetric(ServerConfigGeneralWaitTrackReadyMS, prometheus.GaugeValue, v["general.wait_track_ready_ms"])
-// 			ch <- e.mustNewConstMetric(ServerConfigGeneralEnableVhost, prometheus.GaugeValue, v["general.enableVhost"])
-// 			ch <- e.mustNewConstMetric(ServerConfigGeneralFlowThreshold, prometheus.GaugeValue, v["general.flowThreshold"])
-// 			ch <- e.mustNewConstMetric(ServerConfigGeneralStreamNoneReaderDelayMS, prometheus.GaugeValue, v["general.streamNoneReaderDelayMS"])
-// 			ch <- e.mustNewConstMetric(ServerConfigHlsBroadcastRecordTs, prometheus.GaugeValue, v["hls.broadcastRecordTs"])
-// 			ch <- e.mustNewConstMetric(ServerConfigHlsDeleteDelaySec, prometheus.GaugeValue, v["hls.deleteDelaySec"])
-// 			ch <- e.mustNewConstMetric(ServerConfigHlsFastRegister, prometheus.GaugeValue, v["hls.fastRegister"])
-// 			ch <- e.mustNewConstMetric(ServerConfigHlsFileBufSize, prometheus.GaugeValue, v["hls.fileBufSize"])
-// 			ch <- e.mustNewConstMetric(ServerConfigHlsSegDelay, prometheus.GaugeValue, v["hls.segDelay"])
-// 			ch <- e.mustNewConstMetric(ServerConfigHlsSegDur, prometheus.GaugeValue, v["hls.segDur"])
-// 			ch <- e.mustNewConstMetric(ServerConfigHlsSegKeep, prometheus.GaugeValue, v["hls.segKeep"])
-// 			ch <- e.mustNewConstMetric(ServerConfigHlsSegNum, prometheus.GaugeValue, v["hls.segNum"])
-// 			ch <- e.mustNewConstMetric(ServerConfigHlsSegRetain, prometheus.GaugeValue, v["hls.segRetain"])
-// 			ch <- e.mustNewConstMetric(ServerHTTP, prometheus.GaugeValue, 1, v["http.allow_cross_domains"], v["http.allow_ip_range"], v["http.charSet"], v["http.dirMenu"], v["http.forbidCacheSuffix"], v["http.forwarded_ip_header"], v["http.keepAliveSecond"], v["http.maxReqSize"], v["http.notFound"], v["http.port"], v["http.rootPath"], v["http.sendBufSize"], v["http.sslport"], v["http.virtualPath"])
-// 			ch <- e.mustNewConstMetric(ServerMulticast, prometheus.GaugeValue, 1, v["multicast.addrMax"], v["multicast.addrMin"], v["multicast.udpTTL"])
-// 			ch <- e.mustNewConstMetric(ServerProtocol, prometheus.GaugeValue, 1, v["protocol.add_mute_audio"], v["protocol.auto_close"], v["protocol.continue_push_ms"], v["protocol.enable_audio"], v["protocol.enable_fmp4"], v["protocol.enable_hls"], v["protocol.enable_hls_fmp4"], v["protocol.enable_mp4"], v["protocol.enable_rtmp"], v["protocol.enable_rtsp"], v["protocol.enable_ts"], v["protocol.fmp4_demand"], v["protocol.hls_demand"], v["protocol.hls_save_path"], v["protocol.modify_stamp"], v["protocol.mp4_as_player"], v["protocol.mp4_max_second"], v["protocol.mp4_save_path"], v["protocol.paced_sender_ms"], v["protocol.rtmp_demand"], v["protocol.rtsp_demand"], v["protocol.ts_demand"])
-// 			ch <- e.mustNewConstMetric(ServerRecord, prometheus.GaugeValue, 1, v["record.appName"], v["record.enableFmp4"], v["record.fastStart"], v["record.fileBufSize"], v["record.fileRepeat"], v["record.sampleMS"])
-// 			ch <- e.mustNewConstMetric(ServerRtx, prometheus.GaugeValue, 1, v["rtx.externIP"], v["rtx.maxNackMS"], v["rtx.max_bitrate"], v["rtx.min_bitrate"], v["rtx.nackIntervalRatio"], v["rtx.nackMaxCount"], v["rtx.nackMaxMS"], v["rtx.nackMaxSize"], v["rtx.nackRtpSize"], v["rtx.port"], v["rtx.preferredCodecA"], v["rtx.preferredCodecV"], v["rtx.rembBitRate"], v["rtx.rtpCacheCheckInterval"], v["rtx.start_bitrate"], v["rtx.tcpPort"], v["rtx.timeoutSec"])
-// 			ch <- e.mustNewConstMetric(ServerRtmp, prometheus.GaugeValue, 1, v["rtmp.directProxy"], v["rtmp.enhanced"], v["rtmp.handshakeSecond"], v["rtmp.keepAliveSecond"], v["rtmp.port"], v["rtmp.sslport"])
-// 			ch <- e.mustNewConstMetric(ServerRtp, prometheus.GaugeValue, 1, v["rtp.audioMtuSize"], v["rtp.h264_stap_a"], v["rtp.lowLatency"], v["rtp.rtpMaxSize"], v["rtp.videoMtuSize"])
-// 			ch <- e.mustNewConstMetric(ServerRtpProxy, prometheus.GaugeValue, 1, v["rtp_proxy.dumpDir"], v["rtp_proxy.gop_cache"], v["rtp_proxy.h264_pt"], v["rtp_proxy.h265_pt"], v["rtp_proxy.opus_pt"], v["rtp_proxy.port"], v["rtp_proxy.port_range"], v["rtp_proxy.ps_pt"], v["rtp_proxy.rtp_g711_dur_ms"], v["rtp_proxy.timeoutSec"], v["rtp_proxy.udp_recv_socket_buffer"])
-// 			ch <- e.mustNewConstMetric(ServerRtsp, prometheus.GaugeValue, 1, v["rtsp.authBasic"], v["rtsp.directProxy"], v["rtsp.handshakeSecond"], v["rtsp.keepAliveSecond"], v["rtsp.lowLatency"], v["rtsp.port"], v["rtsp.rtpTransportType"], v["rtsp.sslport"])
-// 			ch <- e.mustNewConstMetric(ServerShell, prometheus.GaugeValue, 1, v["shell.maxReqSize"], v["shell.port"])
-// 			ch <- e.mustNewConstMetric(ServerSrt, prometheus.GaugeValue, 1, v["srt.latencyMul"], v["srt.pktBufSize"], v["srt.port"], v["srt.timeoutSec"])
-// 		}
-// 		return nil
-// 	}
-// 	e.fetchHTTP(ch, "index/api/getServerConfig", processFunc)
-// }
 
 func (e *Exporter) extractSession(ch chan<- prometheus.Metric) {
 	processFunc := func(body io.ReadCloser) error {
