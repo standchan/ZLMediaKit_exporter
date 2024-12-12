@@ -22,15 +22,24 @@ Prometheus exporter for [ZLMediaKit](https://github.com/ZLMediaKit/ZLMediaKit) m
 go get -u github.com/standchan/zlm_exporter
 ```
 
-## Command line flags
+## Environment Variables
 
 
-|  Name     | Description                               | default  |
-|-----------------|-------------------------------------------|----------|
-| `kafka_brokers` | Number of Brokers in the Kafka Cluster    | |
-| `kafka_topics`  | Number of Topics in the Kafka Cluster     | |
-| `kafka_partitions`  | Number of Partitions in the Kafka Cluster | |
-
+|  Name                      | Description                               | default  |
+|-------------------------   |-------------------------------------------|----------|
+| `ZLM_EXPORTER_SCRAPE_URI`  | URI on which to scrape zlmediakit.       |  http://localhost  |
+| `ZLM_EXPORTER_METRICS_PATH`| Path under which to expose metrics. |  /metrics |
+| `ZLM_EXPORTER_SECRET`      | Secret for the scrape URI            |        |
+| `ZLM_EXPORTER_LOG_FORMAT`  | Log format, valid options are txt and json | txt |
+| `ZLM_EXPORTER_LOG_LEVEL`   | Log level, valid options are debug, info, warn, error, fatal, panic | info |
+| `ZLM_EXPORTER_TLS_CA_CERT_FILE` | Path to the CA certificate file | |
+| `ZLM_EXPORTER_TLS_CLIENT_CERT_FILE` | Path to the client certificate file | |
+| `ZLM_EXPORTER_TLS_CLIENT_KEY_FILE` | Path to the client key file | |
+| `ZLM_EXPORTER_TLS_SERVER_KEY_FILE` | Path to the server key file | |
+| `ZLM_EXPORTER_TLS_SERVER_CERT_FILE` | Path to the server certificate file | |
+| `ZLM_EXPORTER_TLS_SERVER_CA_CERT_FILE` | Path to the server CA certificate file | |
+| `ZLM_EXPORTER_TLS_SERVER_MIN_VERSION` | Minimum TLS version supported | |
+| `ZLM_EXPORTER_TLS_SKIP_VERIFY` | Skip TLS verification | false |
 
 ## Metrics
 
