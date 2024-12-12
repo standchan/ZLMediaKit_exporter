@@ -65,12 +65,6 @@ var (
 
 var metrics []*prometheus.Desc
 
-func newMetricDescr(namespace string, metricName string, docString string, labels []string) *prometheus.Desc {
-	newDesc := prometheus.NewDesc(prometheus.BuildFQName(namespace, "", metricName), docString, labels, nil)
-	metrics = append(metrics, newDesc)
-	return newDesc
-}
-
 var (
 	ZLMediaKitInfo = newMetricDescr(namespace, "version_info", "ZLMediaKit version info.", []string{"branchName", "buildTime", "commitHash"})
 	ApiStatus      = newMetricDescr(namespace, "api_status", "The status of API endpoint", []string{"endpoint"})
@@ -108,9 +102,19 @@ var (
 	SessionTotal = newMetricDescr(namespace, "session_total", "Total number of sessions", []string{})
 
 	// stream metrics
-	StreamTotal       = newMetricDescr(namespace, "stream_total", "Total number of streams", []string{})
-	StreamReaderCount = newMetricDescr(namespace, "stream_reader_count", "Stream reader count", []string{"app", "stream", "schema", "vhost"})
-	SteamBandwidth    = newMetricDescr(namespace, "stream_bandwidth", "Stream bandwidth", []string{"app", "stream", "schema", "vhost", "originType"})
+	StreamsInfo = newMetricDescr(namespace, "stream_info", "Stream basic information",
+		[]string{"app", "stream", "vhost", "origin_type", "origin_url"})
+	StreamReaderCount      = newMetricDescr(namespace, "stream_reader_count", "Stream reader count", []string{"app", "stream", "schema", "vhost"})
+	StreamTotalReaderCount = newMetricDescr(namespace, "stream_total_reader_count",
+		"Total reader count across all schemas",
+		[]string{"app", "stream", "vhost"})
+	StreamBandwidth = newMetricDescr(namespace, "stream_bandwidth", "Stream bandwidth", []string{"app", "stream", "schema", "vhost", "originType"})
+	StreamTotal     = newMetricDescr(namespace, "stream_total", "Total number of streams", []string{})
+
+	// 视频轨道指标
+	StreamVideoInfo = newMetricDescr(namespace, "stream_video_info", "Stream video information", []string{"app", "stream", "schema", "vhost", "codec", "resolution"})
+	StreamVideoFPS  = newMetricDescr(namespace, "stream_video_fps", "Stream video frames per second", []string{"app", "stream", "schema", "vhost"})
+	StreamVideoGOP  = newMetricDescr(namespace, "stream_video_gop_ms", "Stream video GOP interval in milliseconds", []string{"app", "stream", "schema", "vhost"})
 
 	// rtp metrics
 	RtpServerInfo  = newMetricDescr(namespace, "rtp_server", "RTP server info", []string{"port", "stream_id"})
@@ -149,6 +153,59 @@ type BuildInfo struct {
 	Date      string
 }
 
+var tlsVersions = map[string]uint16{
+	"TLS1.3": tls.VersionTLS13,
+	"TLS1.2": tls.VersionTLS12,
+	"TLS1.1": tls.VersionTLS11,
+	"TLS1.0": tls.VersionTLS10,
+}
+
+// GetServerCertificateFunc returns a function for tls.Config.GetCertificate
+func GetServerCertificateFunc(certFile, keyFile string) func(*tls.ClientHelloInfo) (*tls.Certificate, error) {
+	return func(*tls.ClientHelloInfo) (*tls.Certificate, error) {
+		return LoadKeyPair(certFile, keyFile)
+	}
+}
+
+// GetConfigForClientFunc returns a function for tls.Config.GetConfigForClient
+func GetConfigForClientFunc(certFile, keyFile, caCertFile string) func(*tls.ClientHelloInfo) (*tls.Config, error) {
+	return func(*tls.ClientHelloInfo) (*tls.Config, error) {
+		certificates, err := LoadCAFile(caCertFile)
+		if err != nil {
+			return nil, err
+		}
+
+		tlsConfig := tls.Config{
+			ClientAuth:     tls.RequireAndVerifyClientCert,
+			ClientCAs:      certificates,
+			GetCertificate: GetServerCertificateFunc(certFile, keyFile),
+		}
+		return &tlsConfig, nil
+	}
+}
+
+// LoadKeyPair reads and parses a public/private key pair from a pair of files.
+// The files must contain PEM encoded data.
+func LoadKeyPair(certFile, keyFile string) (*tls.Certificate, error) {
+	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
+	if err != nil {
+		return nil, err
+	}
+	return &cert, nil
+}
+
+// LoadCAFile reads and parses CA certificates from a file into a pool.
+// The file must contain PEM encoded data.
+func LoadCAFile(caFile string) (*x509.CertPool, error) {
+	pemCerts, err := os.ReadFile(caFile)
+	if err != nil {
+		return nil, err
+	}
+	pool := x509.NewCertPool()
+	pool.AppendCertsFromPEM(pemCerts)
+	return pool, nil
+}
+
 func NewExporter(logger *logrus.Logger, options Options) (*Exporter, error) {
 	exporter := &Exporter{
 		URI: options.ScrapeURI,
@@ -176,6 +233,12 @@ func NewExporter(logger *logrus.Logger, options Options) (*Exporter, error) {
 	}
 
 	return exporter, nil
+}
+
+func newMetricDescr(namespace string, metricName string, docString string, labels []string) *prometheus.Desc {
+	newDesc := prometheus.NewDesc(prometheus.BuildFQName(namespace, "", metricName), docString, labels, nil)
+	metrics = append(metrics, newDesc)
+	return newDesc
 }
 
 func (e *Exporter) CreateClientTLSConfig() *tls.Config {
@@ -240,59 +303,6 @@ func (e *Exporter) CreateServerTLSConfig(certFile, keyFile, caCertFile, minVersi
 	return &tlsConfig, nil
 }
 
-var tlsVersions = map[string]uint16{
-	"TLS1.3": tls.VersionTLS13,
-	"TLS1.2": tls.VersionTLS12,
-	"TLS1.1": tls.VersionTLS11,
-	"TLS1.0": tls.VersionTLS10,
-}
-
-// GetServerCertificateFunc returns a function for tls.Config.GetCertificate
-func GetServerCertificateFunc(certFile, keyFile string) func(*tls.ClientHelloInfo) (*tls.Certificate, error) {
-	return func(*tls.ClientHelloInfo) (*tls.Certificate, error) {
-		return LoadKeyPair(certFile, keyFile)
-	}
-}
-
-// GetConfigForClientFunc returns a function for tls.Config.GetConfigForClient
-func GetConfigForClientFunc(certFile, keyFile, caCertFile string) func(*tls.ClientHelloInfo) (*tls.Config, error) {
-	return func(*tls.ClientHelloInfo) (*tls.Config, error) {
-		certificates, err := LoadCAFile(caCertFile)
-		if err != nil {
-			return nil, err
-		}
-
-		tlsConfig := tls.Config{
-			ClientAuth:     tls.RequireAndVerifyClientCert,
-			ClientCAs:      certificates,
-			GetCertificate: GetServerCertificateFunc(certFile, keyFile),
-		}
-		return &tlsConfig, nil
-	}
-}
-
-// LoadKeyPair reads and parses a public/private key pair from a pair of files.
-// The files must contain PEM encoded data.
-func LoadKeyPair(certFile, keyFile string) (*tls.Certificate, error) {
-	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
-	if err != nil {
-		return nil, err
-	}
-	return &cert, nil
-}
-
-// LoadCAFile reads and parses CA certificates from a file into a pool.
-// The file must contain PEM encoded data.
-func LoadCAFile(caFile string) (*x509.CertPool, error) {
-	pemCerts, err := os.ReadFile(caFile)
-	if err != nil {
-		return nil, err
-	}
-	pool := x509.NewCertPool()
-	pool.AppendCertsFromPEM(pemCerts)
-	return pool, nil
-}
-
 func (e *Exporter) Describe(ch chan<- *prometheus.Desc) {
 	for _, metric := range metrics {
 		ch <- metric
@@ -328,7 +338,7 @@ type APIResponseDataThreads []struct {
 }
 
 type APIResponseData interface {
-	[]struct{} | map[string]interface{} | []map[string]string | []map[string]interface{} | []string | APIResponseDataThreads
+	[]struct{} | map[string]interface{} | []map[string]string | []map[string]interface{} | []string | APIResponseDataThreads | []StreamInfo
 }
 
 type APIResponseGeneric[T APIResponseData] struct {
@@ -520,36 +530,97 @@ func (e *Exporter) extractSession(ch chan<- prometheus.Metric) {
 	e.fetchHTTP(ch, "index/api/getAllSession", processFunc)
 }
 
+type Track struct {
+	Channels      int     `json:"channels"`
+	CodecID       int     `json:"codec_id"`
+	CodecIDName   string  `json:"codec_id_name"`
+	CodecType     int     `json:"codec_type"`
+	Duration      int     `json:"duration"`
+	Frames        int     `json:"frames"`
+	Ready         bool    `json:"ready"`
+	SampleBit     int     `json:"sample_bit,omitempty"`
+	SampleRate    int     `json:"sample_rate,omitempty"`
+	FPS           float64 `json:"fps,omitempty"`
+	Height        int     `json:"height,omitempty"`
+	Width         int     `json:"width,omitempty"`
+	GopIntervalMS int     `json:"gop_interval_ms,omitempty"`
+	KeyFrames     int     `json:"key_frames,omitempty"`
+}
+
+type StreamInfo struct {
+	AliveSecond      int     `json:"aliveSecond"`
+	App              string  `json:"app"`
+	BytesSpeed       float64 `json:"bytesSpeed"`
+	CreateStamp      int64   `json:"createStamp"`
+	IsRecordingHLS   bool    `json:"isRecordingHLS"`
+	IsRecordingMP4   bool    `json:"isRecordingMP4"`
+	OriginType       int     `json:"originType"`
+	OriginTypeStr    string  `json:"originTypeStr"`
+	OriginUrl        string  `json:"originUrl"`
+	ReaderCount      int     `json:"readerCount"`
+	Schema           string  `json:"schema"`
+	Stream           string  `json:"stream"`
+	TotalReaderCount int     `json:"totalReaderCount"`
+	Tracks           []Track `json:"tracks"`
+	Vhost            string  `json:"vhost"`
+}
+
+// stream 相同表示同一个流，schema 表示具体的协议。目前 zlm 一个流会 push 多个 schema 的流
 func (e *Exporter) extractStream(ch chan<- prometheus.Metric) {
 	processFunc := func(body io.ReadCloser) error {
-		var apiResponse APIResponseGeneric[[]map[string]interface{}]
+		var apiResponse APIResponseGeneric[[]StreamInfo]
 		if err := json.NewDecoder(body).Decode(&apiResponse); err != nil {
 			return fmt.Errorf("error decoding JSON response: %w", err)
 		}
-		if apiResponse.Code != 0 {
-			return fmt.Errorf("unexpected API response code: %d,reason: %s", apiResponse.Code, apiResponse.Msg)
+
+		// 用于跟踪已处理的流
+		processedStreams := make(map[string]bool)
+
+		for _, stream := range apiResponse.Data {
+			// 生成流的唯一标识
+			streamKey := fmt.Sprintf("%s_%s_%s", stream.App, stream.Stream, stream.Vhost)
+
+			// 每个流只记录一次总体指标
+			if !processedStreams[streamKey] {
+				// 记录流的基本信息
+				ch <- prometheus.MustNewConstMetric(StreamsInfo, prometheus.GaugeValue,
+					1, stream.App, stream.Stream, stream.Vhost,
+					stream.OriginTypeStr, stream.OriginUrl)
+
+				// 记录总观看人数
+				ch <- prometheus.MustNewConstMetric(StreamTotalReaderCount,
+					prometheus.GaugeValue,
+					float64(stream.TotalReaderCount),
+					stream.App, stream.Stream, stream.Vhost)
+
+				processedStreams[streamKey] = true
+			}
+
+			// 记录每个协议的具体指标
+			ch <- prometheus.MustNewConstMetric(StreamReaderCount,
+				prometheus.GaugeValue,
+				float64(stream.ReaderCount),
+				stream.App, stream.Stream, stream.Vhost, stream.Schema)
+
+			ch <- prometheus.MustNewConstMetric(StreamBandwidth,
+				prometheus.GaugeValue,
+				stream.BytesSpeed,
+				stream.App, stream.Stream, stream.Vhost, stream.Schema)
+
+			// 处理视频轨道
+			for _, track := range stream.Tracks {
+				if track.CodecType == 0 { // 视频轨道
+					resolution := fmt.Sprintf("%dx%d", track.Width, track.Height)
+					ch <- prometheus.MustNewConstMetric(StreamVideoInfo, prometheus.GaugeValue,
+						1, append(labels, track.CodecIDName, resolution)...)
+					ch <- prometheus.MustNewConstMetric(StreamVideoFPS, prometheus.GaugeValue,
+						track.FPS, labels...)
+					ch <- prometheus.MustNewConstMetric(StreamVideoGOP, prometheus.GaugeValue,
+						float64(track.GopIntervalMS), labels...)
+				}
+			}
 		}
 
-		for _, v := range apiResponse.Data {
-			app := fmt.Sprint(v["app"])
-			stream := fmt.Sprint(v["stream"])
-			schema := fmt.Sprint(v["schema"])
-			readerCount, ok := v["readerCount"].(float64)
-			if !ok {
-				e.logger.Println("msg", "error converting readerCount to float64")
-				continue
-			}
-			vhost := fmt.Sprint(v["vhost"])
-			originType := fmt.Sprint(v["originType"])
-			bytesSpeed, ok := v["bytesSpeed"].(float64)
-			if !ok {
-				e.logger.Println("msg", "error converting bytesSpeed to float64")
-				continue
-			}
-			ch <- prometheus.MustNewConstMetric(StreamReaderCount, prometheus.GaugeValue, readerCount, app, stream, schema, vhost)
-			ch <- prometheus.MustNewConstMetric(SteamBandwidth, prometheus.GaugeValue, bytesSpeed, app, stream, schema, vhost, originType)
-		}
-		ch <- prometheus.MustNewConstMetric(StreamTotal, prometheus.GaugeValue, float64(len(apiResponse.Data)))
 		return nil
 	}
 	e.fetchHTTP(ch, "index/api/getMediaList", processFunc)
@@ -599,22 +670,22 @@ func newLogger(logFormat, logLevel string) *logrus.Logger {
 
 var (
 	webConfig    = webflag.AddFlags(kingpin.CommandLine, ":9101")
-	metricsPath  = kingpin.Flag("web.telemetry-path", "Path under which to expose metrics.").Default(getEnv("ZLM_EXPORTER_METRICS_PATH", "/metrics")).String()
-	zlmScrapeURI = kingpin.Flag("zlm.scrape-uri", "URI on which to scrape zlmediakit.").Default(getEnv("ZLM_EXPORTER_SCRAPE_URI", "http://localhost")).String()
-	zlmSecret    = kingpin.Flag("zlm.secret", "Secret for the scrape URI").Default(getEnv("ZLM_EXPORTER_SECRET", "")).String()
-	logFormat    = kingpin.Flag("zlm.log-format", "Log format, valid options are txt and json").Default(getEnv("ZLM_EXPORTER_LOG_FORMAT", "txt")).String()
-	logLevel     = kingpin.Flag("zlm.log-level", "Log level, valid options are debug, info, warn, error, fatal, panic").Default(getEnv("ZLM_EXPORTER_LOG_LEVEL", "info")).String()
+	zlmScrapeURI = kingpin.Flag("scrape-uri", "URI on which to scrape zlmediakit.").Default(getEnv("ZLM_EXPORTER_SCRAPE_URI", "http://localhost")).String()
+	metricsPath  = kingpin.Flag("metric-path", "Path under which to expose metrics.").Default(getEnv("ZLM_EXPORTER_METRICS_PATH", "/metrics")).String()
+	zlmSecret    = kingpin.Flag("secret", "Secret for the scrape URI").Default(getEnv("ZLM_EXPORTER_SECRET", "")).String()
+	logFormat    = kingpin.Flag("log-format", "Log format, valid options are txt and json").Default(getEnv("ZLM_EXPORTER_LOG_FORMAT", "txt")).String()
+	logLevel     = kingpin.Flag("log-level", "Log level, valid options are debug, info, warn, error, fatal, panic").Default(getEnv("ZLM_EXPORTER_LOG_LEVEL", "info")).String()
 
-	tlsCACertFile = kingpin.Flag("tls.ca-cert-file", "Path to the CA certificate file").Default(getEnv("ZLM_EXPORTER_TLS_CA_CERT_FILE", "")).String()
+	tlsCACertFile = kingpin.Flag("tls-cacert-file", "Path to the CA certificate file").Default(getEnv("ZLM_EXPORTER_TLS_CA_CERT_FILE", "")).String()
 
-	tlsClientCertFile = kingpin.Flag("tls.client-cert-file", "Path to the client certificate file").Default(getEnv("ZLM_EXPORTER_TLS_CLIENT_CERT_FILE", "")).String()
-	tlsClientKeyFile  = kingpin.Flag("tls.client-key-file", "Path to the client key file").Default(getEnv("ZLM_EXPORTER_TLS_CLIENT_KEY_FILE", "")).String()
+	tlsClientCertFile = kingpin.Flag("tls-client-cert-file", "Path to the client certificate file").Default(getEnv("ZLM_EXPORTER_TLS_CLIENT_CERT_FILE", "")).String()
+	tlsClientKeyFile  = kingpin.Flag("tls-client-key-file", "Path to the client key file").Default(getEnv("ZLM_EXPORTER_TLS_CLIENT_KEY_FILE", "")).String()
 
-	tlsServerKeyFile    = kingpin.Flag("tls.server-key-file", "Path to the server key file").Default(getEnv("ZLM_EXPORTER_TLS_SERVER_KEY_FILE", "")).String()
-	tlsServerCertFile   = kingpin.Flag("tls.server-cert-file", "Path to the server certificate file").Default(getEnv("ZLM_EXPORTER_TLS_SERVER_CERT_FILE", "")).String()
-	tlsServerCaCertFile = kingpin.Flag("tls.server-ca-cert-file", "Path to the server CA certificate file").Default(getEnv("ZLM_EXPORTER_TLS_SERVER_CA_CERT_FILE", "")).String()
-	tlsServerMinVersion = kingpin.Flag("tls.server-min-version", "Minimum TLS version supported").Default(getEnv("ZLM_EXPORTER_TLS_SERVER_MIN_VERSION", "")).String()
-	skipTLSVerification = kingpin.Flag("tls.skip-verify", "Skip TLS verification").Default(getEnv("ZLM_EXPORTER_TLS_SKIP_VERIFY", "false")).Bool()
+	tlsServerKeyFile    = kingpin.Flag("tls-server-key-file", "Path to the server key file").Default(getEnv("ZLM_EXPORTER_TLS_SERVER_KEY_FILE", "")).String()
+	tlsServerCertFile   = kingpin.Flag("tls-server-cert-file", "Path to the server certificate file").Default(getEnv("ZLM_EXPORTER_TLS_SERVER_CERT_FILE", "")).String()
+	tlsServerCaCertFile = kingpin.Flag("tls-server-ca-cert-file", "Path to the server CA certificate file").Default(getEnv("ZLM_EXPORTER_TLS_SERVER_CA_CERT_FILE", "")).String()
+	tlsServerMinVersion = kingpin.Flag("tls-server-min-version", "Minimum TLS version supported").Default(getEnv("ZLM_EXPORTER_TLS_SERVER_MIN_VERSION", "")).String()
+	skipTLSVerification = kingpin.Flag("tls-skip-verify", "Skip TLS verification").Default(getEnv("ZLM_EXPORTER_TLS_SKIP_VERIFY", "false")).Bool()
 )
 
 // doc: https://prometheus.io/docs/instrumenting/writing_exporters/
