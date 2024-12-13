@@ -102,19 +102,12 @@ var (
 	SessionTotal = newMetricDescr(namespace, "session_total", "Total number of sessions", []string{})
 
 	// stream metrics
-	StreamsInfo = newMetricDescr(namespace, "stream_info", "Stream basic information",
-		[]string{"app", "stream", "vhost", "origin_type", "origin_url"})
-	StreamReaderCount      = newMetricDescr(namespace, "stream_reader_count", "Stream reader count", []string{"app", "stream", "schema", "vhost"})
-	StreamTotalReaderCount = newMetricDescr(namespace, "stream_total_reader_count",
-		"Total reader count across all schemas",
-		[]string{"app", "stream", "vhost"})
-	StreamBandwidth = newMetricDescr(namespace, "stream_bandwidth", "Stream bandwidth", []string{"app", "stream", "schema", "vhost", "originType"})
-	StreamTotal     = newMetricDescr(namespace, "stream_total", "Total number of streams", []string{})
-
-	// 视频轨道指标
-	StreamVideoInfo = newMetricDescr(namespace, "stream_video_info", "Stream video information", []string{"app", "stream", "schema", "vhost", "codec", "resolution"})
-	StreamVideoFPS  = newMetricDescr(namespace, "stream_video_fps", "Stream video frames per second", []string{"app", "stream", "schema", "vhost"})
-	StreamVideoGOP  = newMetricDescr(namespace, "stream_video_gop_ms", "Stream video GOP interval in milliseconds", []string{"app", "stream", "schema", "vhost"})
+	StreamsInfo            = newMetricDescr(namespace, "stream_info", "Stream basic information", []string{"vhost", "app", "stream", "schema", "origin_type", "origin_url"})
+	StreamStatus           = newMetricDescr(namespace, "stream_status", "Stream status (1: active with data flowing, 0: inactive)", []string{"vhost", "app", "stream", "schema"})
+	StreamReaderCount      = newMetricDescr(namespace, "stream_reader_count", "Stream reader count", []string{"vhost", "app", "stream", "schema"})
+	StreamTotalReaderCount = newMetricDescr(namespace, "stream_total_reader_count", "Total reader count across all schemas", []string{"vhost", "app", "stream"})
+	StreamBandwidths       = newMetricDescr(namespace, "stream_bandwidth", "Stream bandwidth", []string{"vhost", "app", "stream", "schema", "originType"})
+	StreamTotal            = newMetricDescr(namespace, "stream_total", "Total number of streams", []string{})
 
 	// rtp metrics
 	RtpServerInfo  = newMetricDescr(namespace, "rtp_server", "RTP server info", []string{"port", "stream_id"})
@@ -332,16 +325,12 @@ func (e *Exporter) scrape(ch chan<- prometheus.Metric) (up float64) {
 	return 1
 }
 
-type APIResponseDataThreads []struct {
-	Load  float64 `json:"load"`
-	Delay float64 `json:"delay"`
+type ZLMAPIResponseData interface {
+	[]string | APIVersionObject | APINetworkThreadsObjects | APIWorkThreadsObjects |
+		APIStreamInfoObjects | APIStatisticsObject | APISessionObjects | APIRtpServerObjects
 }
 
-type APIResponseData interface {
-	[]struct{} | map[string]interface{} | []map[string]string | []map[string]interface{} | []string | APIResponseDataThreads | []StreamInfo
-}
-
-type APIResponseGeneric[T APIResponseData] struct {
+type ZLMAPIResponse[T ZLMAPIResponseData] struct {
 	Code int    `json:"code"`
 	Msg  string `json:"msg"`
 	Data T      `json:"data"`
@@ -390,9 +379,15 @@ func (e *Exporter) fetchHTTP(ch chan<- prometheus.Metric, endpoint string, proce
 	}
 }
 
+type APIVersionObject struct {
+	BranchName string `json:"branchName"`
+	BuildTime  string `json:"buildTime"`
+	CommitHash string `json:"commitHash"`
+}
+
 func (e *Exporter) extractVersion(ch chan<- prometheus.Metric) {
 	processFunc := func(body io.ReadCloser) error {
-		var apiResponse APIResponseGeneric[map[string]interface{}]
+		var apiResponse ZLMAPIResponse[APIVersionObject]
 		if err := json.NewDecoder(body).Decode(&apiResponse); err != nil {
 			return fmt.Errorf("error decoding JSON response: %w", err)
 		}
@@ -400,7 +395,7 @@ func (e *Exporter) extractVersion(ch chan<- prometheus.Metric) {
 			return fmt.Errorf("unexpected API response code: %d,reason: %s", apiResponse.Code, apiResponse.Msg)
 		}
 		data := apiResponse.Data
-		ch <- prometheus.MustNewConstMetric(ZLMediaKitInfo, prometheus.GaugeValue, 1, data["branchName"].(string), data["buildTime"].(string), data["commitHash"].(string))
+		ch <- prometheus.MustNewConstMetric(ZLMediaKitInfo, prometheus.GaugeValue, 1, data.BranchName, data.BuildTime, data.CommitHash)
 		return nil
 	}
 	e.fetchHTTP(ch, "index/api/version", processFunc)
@@ -408,7 +403,7 @@ func (e *Exporter) extractVersion(ch chan<- prometheus.Metric) {
 
 func (e *Exporter) extractAPIStatus(ch chan<- prometheus.Metric) {
 	processFunc := func(body io.ReadCloser) error {
-		var apiResponse APIResponseGeneric[[]string]
+		var apiResponse ZLMAPIResponse[[]string]
 
 		if err := json.NewDecoder(body).Decode(&apiResponse); err != nil {
 			return fmt.Errorf("error decoding JSON response: %w", err)
@@ -427,9 +422,16 @@ func (e *Exporter) extractAPIStatus(ch chan<- prometheus.Metric) {
 	e.fetchHTTP(ch, "index/api/getApiList", processFunc)
 }
 
+type APINetworkThreadsObject struct {
+	Load  float64 `json:"load"`
+	Delay float64 `json:"delay"`
+}
+
+type APINetworkThreadsObjects []APINetworkThreadsObject
+
 func (e *Exporter) extractNetworkThreads(ch chan<- prometheus.Metric) {
 	processFunc := func(body io.ReadCloser) error {
-		var apiResponse APIResponseGeneric[APIResponseDataThreads]
+		var apiResponse ZLMAPIResponse[APINetworkThreadsObjects]
 		if err := json.NewDecoder(body).Decode(&apiResponse); err != nil {
 			return fmt.Errorf("error decoding JSON response: %w", err)
 		}
@@ -451,9 +453,16 @@ func (e *Exporter) extractNetworkThreads(ch chan<- prometheus.Metric) {
 	e.fetchHTTP(ch, "index/api/getThreadsLoad", processFunc)
 }
 
+type APIWorkThreadsObject struct {
+	Load  float64 `json:"load"`
+	Delay float64 `json:"delay"`
+}
+
+type APIWorkThreadsObjects []APIWorkThreadsObject
+
 func (e *Exporter) extractWorkThreads(ch chan<- prometheus.Metric) {
 	processFunc := func(body io.ReadCloser) error {
-		var apiResponse APIResponseGeneric[APIResponseDataThreads]
+		var apiResponse ZLMAPIResponse[APIWorkThreadsObjects]
 		if err := json.NewDecoder(body).Decode(&apiResponse); err != nil {
 			return fmt.Errorf("error decoding JSON response: %w", err)
 		}
@@ -474,9 +483,28 @@ func (e *Exporter) extractWorkThreads(ch chan<- prometheus.Metric) {
 	e.fetchHTTP(ch, "index/api/getWorkThreadsLoad", processFunc)
 }
 
+type APIStatisticsObject struct {
+	Buffer                float64 `json:"Buffer"`
+	BufferLikeString      float64 `json:"BufferLikeString"`
+	BufferList            float64 `json:"BufferList"`
+	BufferRaw             float64 `json:"BufferRaw"`
+	Frame                 float64 `json:"Frame"`
+	FrameImp              float64 `json:"FrameImp"`
+	MediaSource           float64 `json:"MediaSource"`
+	MultiMediaSourceMuxer float64 `json:"MultiMediaSourceMuxer"`
+	RtmpPacket            float64 `json:"RtmpPacket"`
+	RtpPacket             float64 `json:"RtpPacket"`
+	Socket                float64 `json:"Socket"`
+	TcpClient             float64 `json:"TcpClient"`
+	TcpServer             float64 `json:"TcpServer"`
+	TcpSession            float64 `json:"TcpSession"`
+	UdpServer             float64 `json:"UdpServer"`
+	UdpSession            float64 `json:"UdpSession"`
+}
+
 func (e *Exporter) extractStatistics(ch chan<- prometheus.Metric) {
 	processFunc := func(body io.ReadCloser) error {
-		var apiResponse APIResponseGeneric[map[string]interface{}]
+		var apiResponse ZLMAPIResponse[APIStatisticsObject]
 		if err := json.NewDecoder(body).Decode(&apiResponse); err != nil {
 			return fmt.Errorf("error decoding JSON response: %w", err)
 		}
@@ -484,30 +512,42 @@ func (e *Exporter) extractStatistics(ch chan<- prometheus.Metric) {
 			return fmt.Errorf("unexpected API response code: %d,reason: %s", apiResponse.Code, apiResponse.Msg)
 		}
 		data := apiResponse.Data
-		ch <- e.mustNewConstMetric(StatisticsBuffer, prometheus.GaugeValue, data["Buffer"])
-		ch <- e.mustNewConstMetric(StatisticsBufferLikeString, prometheus.GaugeValue, data["BufferLikeString"])
-		ch <- e.mustNewConstMetric(StatisticsBufferList, prometheus.GaugeValue, data["BufferList"])
-		ch <- e.mustNewConstMetric(StatisticsBufferRaw, prometheus.GaugeValue, data["BufferRaw"])
-		ch <- e.mustNewConstMetric(StatisticsFrame, prometheus.GaugeValue, data["Frame"])
-		ch <- e.mustNewConstMetric(StatisticsFrameImp, prometheus.GaugeValue, data["FrameImp"])
-		ch <- e.mustNewConstMetric(StatisticsMediaSource, prometheus.GaugeValue, data["MediaSource"])
-		ch <- e.mustNewConstMetric(StatisticsMultiMediaSourceMuxer, prometheus.GaugeValue, data["MultiMediaSourceMuxer"])
-		ch <- e.mustNewConstMetric(StatisticsRtmpPacket, prometheus.GaugeValue, data["RtmpPacket"])
-		ch <- e.mustNewConstMetric(StatisticsRtpPacket, prometheus.GaugeValue, data["RtpPacket"])
-		ch <- e.mustNewConstMetric(StatisticsSocket, prometheus.GaugeValue, data["Socket"])
-		ch <- e.mustNewConstMetric(StatisticsTcpClient, prometheus.GaugeValue, data["TcpClient"])
-		ch <- e.mustNewConstMetric(StatisticsTcpServer, prometheus.GaugeValue, data["TcpServer"])
-		ch <- e.mustNewConstMetric(StatisticsTcpSession, prometheus.GaugeValue, data["TcpSession"])
-		ch <- e.mustNewConstMetric(StatisticsUdpServer, prometheus.GaugeValue, data["UdpServer"])
-		ch <- e.mustNewConstMetric(StatisticsUdpSession, prometheus.GaugeValue, data["UdpSession"])
+		ch <- e.mustNewConstMetric(StatisticsBuffer, prometheus.GaugeValue, data.Buffer)
+		ch <- e.mustNewConstMetric(StatisticsBufferLikeString, prometheus.GaugeValue, data.BufferLikeString)
+		ch <- e.mustNewConstMetric(StatisticsBufferList, prometheus.GaugeValue, data.BufferList)
+		ch <- e.mustNewConstMetric(StatisticsBufferRaw, prometheus.GaugeValue, data.BufferRaw)
+		ch <- e.mustNewConstMetric(StatisticsFrame, prometheus.GaugeValue, data.Frame)
+		ch <- e.mustNewConstMetric(StatisticsFrameImp, prometheus.GaugeValue, data.FrameImp)
+		ch <- e.mustNewConstMetric(StatisticsMediaSource, prometheus.GaugeValue, data.MediaSource)
+		ch <- e.mustNewConstMetric(StatisticsMultiMediaSourceMuxer, prometheus.GaugeValue, data.MultiMediaSourceMuxer)
+		ch <- e.mustNewConstMetric(StatisticsRtmpPacket, prometheus.GaugeValue, data.RtmpPacket)
+		ch <- e.mustNewConstMetric(StatisticsRtpPacket, prometheus.GaugeValue, data.RtpPacket)
+		ch <- e.mustNewConstMetric(StatisticsSocket, prometheus.GaugeValue, data.Socket)
+		ch <- e.mustNewConstMetric(StatisticsTcpClient, prometheus.GaugeValue, data.TcpClient)
+		ch <- e.mustNewConstMetric(StatisticsTcpServer, prometheus.GaugeValue, data.TcpServer)
+		ch <- e.mustNewConstMetric(StatisticsTcpSession, prometheus.GaugeValue, data.TcpSession)
+		ch <- e.mustNewConstMetric(StatisticsUdpServer, prometheus.GaugeValue, data.UdpServer)
+		ch <- e.mustNewConstMetric(StatisticsUdpSession, prometheus.GaugeValue, data.UdpSession)
 		return nil
 	}
 	e.fetchHTTP(ch, "index/api/getStatistic", processFunc)
 }
 
+type APISessionObject struct {
+	Id         string `json:"id"`
+	Identifier string `json:"identifier"`
+	LocalIp    string `json:"local_ip"`
+	LocalPort  string `json:"local_port"`
+	PeerIp     string `json:"peer_ip"`
+	PeerPort   string `json:"peer_port"`
+	TypeID     string `json:"typeid"`
+}
+
+type APISessionObjects []APISessionObject
+
 func (e *Exporter) extractSession(ch chan<- prometheus.Metric) {
 	processFunc := func(body io.ReadCloser) error {
-		var apiResponse APIResponseGeneric[[]map[string]interface{}]
+		var apiResponse ZLMAPIResponse[APISessionObjects]
 		if err := json.NewDecoder(body).Decode(&apiResponse); err != nil {
 			return fmt.Errorf("error decoding JSON response: %w", err)
 		}
@@ -515,13 +555,13 @@ func (e *Exporter) extractSession(ch chan<- prometheus.Metric) {
 			return fmt.Errorf("unexpected API response code: %d,reason: %s", apiResponse.Code, apiResponse.Msg)
 		}
 		for _, v := range apiResponse.Data {
-			id := fmt.Sprint(v["id"])
-			identifier := fmt.Sprint(v["identifier"])
-			localIP := fmt.Sprint(v["local_ip"])
-			localPort := fmt.Sprint(v["local_port"])
-			peerIP := fmt.Sprint(v["peer_ip"])
-			peerPort := fmt.Sprint(v["peer_port"])
-			typeID := fmt.Sprint(v["typeid"])
+			id := v.Id
+			identifier := v.Identifier
+			localIP := v.LocalIp
+			localPort := v.LocalPort
+			peerIP := v.PeerIp
+			peerPort := v.PeerPort
+			typeID := v.TypeID
 			ch <- prometheus.MustNewConstMetric(SessionInfo, prometheus.GaugeValue, 1, id, identifier, localIP, localPort, peerIP, peerPort, typeID)
 		}
 		ch <- prometheus.MustNewConstMetric(SessionTotal, prometheus.GaugeValue, float64(len(apiResponse.Data)))
@@ -530,30 +570,10 @@ func (e *Exporter) extractSession(ch chan<- prometheus.Metric) {
 	e.fetchHTTP(ch, "index/api/getAllSession", processFunc)
 }
 
-type Track struct {
-	Channels      int     `json:"channels"`
-	CodecID       int     `json:"codec_id"`
-	CodecIDName   string  `json:"codec_id_name"`
-	CodecType     int     `json:"codec_type"`
-	Duration      int     `json:"duration"`
-	Frames        int     `json:"frames"`
-	Ready         bool    `json:"ready"`
-	SampleBit     int     `json:"sample_bit,omitempty"`
-	SampleRate    int     `json:"sample_rate,omitempty"`
-	FPS           float64 `json:"fps,omitempty"`
-	Height        int     `json:"height,omitempty"`
-	Width         int     `json:"width,omitempty"`
-	GopIntervalMS int     `json:"gop_interval_ms,omitempty"`
-	KeyFrames     int     `json:"key_frames,omitempty"`
-}
-
-type StreamInfo struct {
+type APIStreamInfoObject struct {
 	AliveSecond      int     `json:"aliveSecond"`
 	App              string  `json:"app"`
 	BytesSpeed       float64 `json:"bytesSpeed"`
-	CreateStamp      int64   `json:"createStamp"`
-	IsRecordingHLS   bool    `json:"isRecordingHLS"`
-	IsRecordingMP4   bool    `json:"isRecordingMP4"`
 	OriginType       int     `json:"originType"`
 	OriginTypeStr    string  `json:"originTypeStr"`
 	OriginUrl        string  `json:"originUrl"`
@@ -561,33 +581,27 @@ type StreamInfo struct {
 	Schema           string  `json:"schema"`
 	Stream           string  `json:"stream"`
 	TotalReaderCount int     `json:"totalReaderCount"`
-	Tracks           []Track `json:"tracks"`
 	Vhost            string  `json:"vhost"`
 }
 
-// stream 相同表示同一个流，schema 表示具体的协议。目前 zlm 一个流会 push 多个 schema 的流
+type APIStreamInfoObjects []APIStreamInfoObject
+
+// Streams with the same stream name represent the same source stream,
+// while schema indicates the specific protocol.
+// ZLMediaKit automatically pushes the source stream to multiple protocols (schemas) by default.
 func (e *Exporter) extractStream(ch chan<- prometheus.Metric) {
 	processFunc := func(body io.ReadCloser) error {
-		var apiResponse APIResponseGeneric[[]StreamInfo]
+		var apiResponse ZLMAPIResponse[APIStreamInfoObjects]
 		if err := json.NewDecoder(body).Decode(&apiResponse); err != nil {
 			return fmt.Errorf("error decoding JSON response: %w", err)
 		}
 
-		// 用于跟踪已处理的流
 		processedStreams := make(map[string]bool)
-
 		for _, stream := range apiResponse.Data {
-			// 生成流的唯一标识
-			streamKey := fmt.Sprintf("%s_%s_%s", stream.App, stream.Stream, stream.Vhost)
+			// stream total reader count
+			streamKey := fmt.Sprintf("%s_%s_%s_%s", stream.Vhost, stream.App, stream.Stream, stream.Schema)
 
-			// 每个流只记录一次总体指标
 			if !processedStreams[streamKey] {
-				// 记录流的基本信息
-				ch <- prometheus.MustNewConstMetric(StreamsInfo, prometheus.GaugeValue,
-					1, stream.App, stream.Stream, stream.Vhost,
-					stream.OriginTypeStr, stream.OriginUrl)
-
-				// 记录总观看人数
 				ch <- prometheus.MustNewConstMetric(StreamTotalReaderCount,
 					prometheus.GaugeValue,
 					float64(stream.TotalReaderCount),
@@ -596,29 +610,30 @@ func (e *Exporter) extractStream(ch chan<- prometheus.Metric) {
 				processedStreams[streamKey] = true
 			}
 
-			// 记录每个协议的具体指标
+			// stream info
+			ch <- prometheus.MustNewConstMetric(StreamsInfo, prometheus.GaugeValue,
+				1, stream.Vhost, stream.App, stream.Stream, stream.Schema,
+				stream.OriginTypeStr, stream.OriginUrl)
+
+			// stream status
+			status := 0.0
+			if stream.BytesSpeed > 0 {
+				status = 1.0
+			}
+			ch <- prometheus.MustNewConstMetric(StreamStatus, prometheus.GaugeValue,
+				status, stream.Vhost, stream.App, stream.Stream, stream.Schema)
+
+			// stream reader count
 			ch <- prometheus.MustNewConstMetric(StreamReaderCount,
 				prometheus.GaugeValue,
 				float64(stream.ReaderCount),
-				stream.App, stream.Stream, stream.Vhost, stream.Schema)
+				stream.Vhost, stream.App, stream.Stream, stream.Schema)
 
-			ch <- prometheus.MustNewConstMetric(StreamBandwidth,
+			// stream bandwidths
+			ch <- prometheus.MustNewConstMetric(StreamBandwidths,
 				prometheus.GaugeValue,
 				stream.BytesSpeed,
-				stream.App, stream.Stream, stream.Vhost, stream.Schema)
-
-			// 处理视频轨道
-			for _, track := range stream.Tracks {
-				if track.CodecType == 0 { // 视频轨道
-					resolution := fmt.Sprintf("%dx%d", track.Width, track.Height)
-					ch <- prometheus.MustNewConstMetric(StreamVideoInfo, prometheus.GaugeValue,
-						1, append(labels, track.CodecIDName, resolution)...)
-					ch <- prometheus.MustNewConstMetric(StreamVideoFPS, prometheus.GaugeValue,
-						track.FPS, labels...)
-					ch <- prometheus.MustNewConstMetric(StreamVideoGOP, prometheus.GaugeValue,
-						float64(track.GopIntervalMS), labels...)
-				}
-			}
+				stream.Vhost, stream.App, stream.Stream, stream.Schema)
 		}
 
 		return nil
@@ -626,9 +641,16 @@ func (e *Exporter) extractStream(ch chan<- prometheus.Metric) {
 	e.fetchHTTP(ch, "index/api/getMediaList", processFunc)
 }
 
+type APIRtpServerObject struct {
+	Port     string `json:"port"`
+	StreamID string `json:"stream_id"`
+}
+
+type APIRtpServerObjects []APIRtpServerObject
+
 func (e *Exporter) extractRtp(ch chan<- prometheus.Metric) {
 	processFunc := func(body io.ReadCloser) error {
-		var apiResponse APIResponseGeneric[[]map[string]interface{}]
+		var apiResponse ZLMAPIResponse[APIRtpServerObjects]
 		if err := json.NewDecoder(body).Decode(&apiResponse); err != nil {
 			return fmt.Errorf("error decoding JSON response: %w", err)
 		}
@@ -636,9 +658,9 @@ func (e *Exporter) extractRtp(ch chan<- prometheus.Metric) {
 			return fmt.Errorf("unexpected API response code: %d,reason: %s", apiResponse.Code, apiResponse.Msg)
 		}
 		for _, v := range apiResponse.Data {
-			port := fmt.Sprint(v["port"])
-			streamID := fmt.Sprint(v["stream_id"])
-			ch <- prometheus.MustNewConstMetric(RtpServerInfo, prometheus.GaugeValue, 1, port, streamID)
+			rtpPort := v.Port
+			streamID := v.StreamID
+			ch <- prometheus.MustNewConstMetric(RtpServerInfo, prometheus.GaugeValue, 1, rtpPort, streamID)
 		}
 		ch <- prometheus.MustNewConstMetric(RtpServerTotal, prometheus.GaugeValue, float64(len(apiResponse.Data)))
 		return nil
@@ -669,12 +691,14 @@ func newLogger(logFormat, logLevel string) *logrus.Logger {
 }
 
 var (
-	webConfig    = webflag.AddFlags(kingpin.CommandLine, ":9101")
-	zlmScrapeURI = kingpin.Flag("scrape-uri", "URI on which to scrape zlmediakit.").Default(getEnv("ZLM_EXPORTER_SCRAPE_URI", "http://localhost")).String()
-	metricsPath  = kingpin.Flag("metric-path", "Path under which to expose metrics.").Default(getEnv("ZLM_EXPORTER_METRICS_PATH", "/metrics")).String()
-	zlmSecret    = kingpin.Flag("secret", "Secret for the scrape URI").Default(getEnv("ZLM_EXPORTER_SECRET", "")).String()
-	logFormat    = kingpin.Flag("log-format", "Log format, valid options are txt and json").Default(getEnv("ZLM_EXPORTER_LOG_FORMAT", "txt")).String()
-	logLevel     = kingpin.Flag("log-level", "Log level, valid options are debug, info, warn, error, fatal, panic").Default(getEnv("ZLM_EXPORTER_LOG_LEVEL", "info")).String()
+	webConfig = webflag.AddFlags(kingpin.CommandLine, ":9101")
+
+	zlmScrapeURI  = kingpin.Flag("scrape-uri", "URI on which to scrape zlmediakit.").Default(getEnv("ZLM_EXPORTER_SCRAPE_URI", "http://localhost")).String()
+	zlmScrapePath = kingpin.Flag("metric-path", "Path under which to expose metrics.").Default(getEnv("ZLM_EXPORTER_METRICS_PATH", "/metrics")).String()
+	zlmSecret     = kingpin.Flag("secret", "Secret for the scrape URI").Default(getEnv("ZLM_EXPORTER_SECRET", "")).String()
+
+	logFormat = kingpin.Flag("log-format", "Log format, valid options are txt and json").Default(getEnv("ZLM_EXPORTER_LOG_FORMAT", "txt")).String()
+	logLevel  = kingpin.Flag("log-level", "Log level, valid options are debug, info, warn, error, fatal, panic").Default(getEnv("ZLM_EXPORTER_LOG_LEVEL", "info")).String()
 
 	tlsCACertFile = kingpin.Flag("tls-cacert-file", "Path to the CA certificate file").Default(getEnv("ZLM_EXPORTER_TLS_CA_CERT_FILE", "")).String()
 
@@ -726,7 +750,7 @@ func main() {
 	exporter.CreateClientTLSConfig()
 
 	prometheus.MustRegister(exporter)
-	http.Handle(*metricsPath, promhttp.Handler())
+	http.Handle(*zlmScrapePath, promhttp.Handler())
 	srv := &http.Server{}
 	go func() {
 		if *tlsServerCertFile != "" && *tlsServerKeyFile != "" {
