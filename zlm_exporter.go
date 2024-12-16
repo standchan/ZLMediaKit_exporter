@@ -669,25 +669,25 @@ func (e *Exporter) extractRtp(ch chan<- prometheus.Metric) {
 }
 
 func newLogger(logFormat, logLevel string) *logrus.Logger {
-	logger := logrus.New()
+	log := logrus.New()
 
 	switch logFormat {
 	case "json":
-		logger.SetFormatter(&logrus.JSONFormatter{})
+		log.SetFormatter(&logrus.JSONFormatter{})
 	default:
-		logger.SetFormatter(&logrus.TextFormatter{})
+		log.SetFormatter(&logrus.TextFormatter{})
 	}
 
 	level, err := logrus.ParseLevel(logLevel)
 	if err != nil {
-		logger.Fatal(err)
+		log.Fatal(err)
 	}
-	logger.SetLevel(level)
+	log.SetLevel(level)
 
-	logger.Println("msg", "Starting zlm_exporter", "version", version.Info())
-	logger.Println("msg", "Build context", "context", version.BuildContext())
+	log.Println("msg", "Starting zlm_exporter", "version", version.Info())
+	log.Println("msg", "Build context", "context", version.BuildContext())
 
-	return logger
+	return log
 }
 
 var (
