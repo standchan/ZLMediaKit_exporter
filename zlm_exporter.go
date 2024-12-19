@@ -573,9 +573,9 @@ type APISessionObject struct {
 	Id         string `json:"id"`
 	Identifier string `json:"identifier"`
 	LocalIp    string `json:"local_ip"`
-	LocalPort  string `json:"local_port"`
+	LocalPort  int    `json:"local_port"`
 	PeerIp     string `json:"peer_ip"`
-	PeerPort   string `json:"peer_port"`
+	PeerPort   int    `json:"peer_port"`
 	TypeID     string `json:"typeid"`
 }
 
@@ -594,9 +594,9 @@ func (e *Exporter) extractSession(ch chan<- prometheus.Metric) {
 			id := v.Id
 			identifier := v.Identifier
 			localIP := v.LocalIp
-			localPort := v.LocalPort
+			localPort := strconv.Itoa(v.LocalPort)
 			peerIP := v.PeerIp
-			peerPort := v.PeerPort
+			peerPort := strconv.Itoa(v.PeerPort)
 			typeID := v.TypeID
 			ch <- prometheus.MustNewConstMetric(SessionInfo, prometheus.GaugeValue, 1, id, identifier, localIP, localPort, peerIP, peerPort, typeID)
 		}
@@ -727,12 +727,11 @@ func newLogger(logFormat, logLevel string) *logrus.Logger {
 }
 
 var (
-	webConfig          = webflag.AddFlags(kingpin.CommandLine, ":9101")
-	zlmExporterVersion = kingpin.Flag("version", "Show version and exit").Bool()
-	zlmScrapeURI       = kingpin.Flag("scrape-uri", "URI on which to scrape zlmediakit.").Default(getEnv("ZLM_EXPORTER_SCRAPE_URI", "http://localhost")).String()
-	zlmScrapePath      = kingpin.Flag("metric-path", "Path under which to expose metrics.").Default(getEnv("ZLM_EXPORTER_METRICS_PATH", "/metrics")).String()
-	zlmSecret          = kingpin.Flag("secret", "Secret for the scrape URI").Default(getEnv("ZLM_EXPORTER_SECRET", "")).String()
-	zlmMetricsOnly     = kingpin.Flag("metrics-only", "Only export metrics, not key-value metrics").Default(getEnv("ZLM_EXPORTER_METRICS_ONLY", "false")).Bool()
+	webConfig      = webflag.AddFlags(kingpin.CommandLine, ":9101")
+	zlmScrapeURI   = kingpin.Flag("scrape-uri", "URI on which to scrape zlmediakit.").Default(getEnv("ZLM_EXPORTER_SCRAPE_URI", "http://localhost")).String()
+	zlmScrapePath  = kingpin.Flag("metric-path", "Path under which to expose metrics.").Default(getEnv("ZLM_EXPORTER_METRICS_PATH", "/metrics")).String()
+	zlmSecret      = kingpin.Flag("secret", "Secret for the scrape URI").Default(getEnv("ZLM_EXPORTER_SECRET", "")).String()
+	zlmMetricsOnly = kingpin.Flag("metrics-only", "Only export metrics, not key-value metrics").Default(getEnv("ZLM_EXPORTER_METRICS_ONLY", "true")).Bool()
 
 	logFormat = kingpin.Flag("log-format", "Log format, valid options are txt and json").Default(getEnv("ZLM_EXPORTER_LOG_FORMAT", "txt")).String()
 	logLevel  = kingpin.Flag("log-level", "Log level, valid options are debug, info, warn, error, fatal, panic").Default(getEnv("ZLM_EXPORTER_LOG_LEVEL", "info")).String()
@@ -765,21 +764,12 @@ func main() {
 
 	log := newLogger(*logFormat, *logLevel)
 
-	if *zlmExporterVersion {
-		log.Println("msg", "zlm_exporter", "version", version.Info())
-		return
-	}
-
 	log.Printf("Redis Metrics Exporter %s    build date: %s    sha1: %s    Go: %s    GOOS: %s    GOARCH: %s",
 		BuildVersion, BuildDate, BuildCommitSha,
 		runtime.Version(),
 		runtime.GOOS,
 		runtime.GOARCH,
 	)
-
-	if *zlmExporterVersion {
-		return
-	}
 
 	option := Options{
 		ScrapeURI: *zlmScrapeURI,
@@ -812,8 +802,9 @@ func main() {
 	}
 	registry.MustRegister(exporter)
 
-	http.Handle(*zlmScrapePath, promhttp.Handler())
+	http.Handle(*zlmScrapePath, promhttp.HandlerFor(registry, promhttp.HandlerOpts{}))
 	srv := &http.Server{}
+
 	go func() {
 		if *tlsServerCertFile != "" && *tlsServerKeyFile != "" {
 			log.Debugf("bind as TLS using cert %s and key %s", *tlsServerCertFile, *tlsServerKeyFile)
