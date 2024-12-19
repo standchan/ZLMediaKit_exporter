@@ -140,11 +140,11 @@ type Exporter struct {
 	client http.Client
 	mutex  sync.RWMutex
 
-	up           prometheus.Gauge
-	totalScrapes prometheus.Counter
-	scrapeErrors prometheus.CounterVec
-	log          *logrus.Logger
-	options      Options
+	up                prometheus.Gauge
+	totalScrapes      prometheus.Counter
+	totalScrapeErrors prometheus.CounterVec
+	log               *logrus.Logger
+	options           Options
 
 	buildInfo BuildInfo
 }
@@ -237,7 +237,7 @@ func NewExporter(logger *logrus.Logger, options Options) (*Exporter, error) {
 			Help:      "Current total ZLMediaKit scrapes.",
 		}),
 
-		scrapeErrors: *prometheus.NewCounterVec(prometheus.CounterOpts{
+		totalScrapeErrors: *prometheus.NewCounterVec(prometheus.CounterOpts{
 			Namespace: namespace,
 			Name:      "scrape_errors_total",
 			Help:      "Number of errors while scraping ZLMediaKit.",
@@ -750,8 +750,6 @@ var (
 
 // doc: https://prometheus.io/docs/instrumenting/writing_exporters/
 // todo 加入--disable-exporting-key-values
-// todo 加入--zlMetricsOnly
-// 1.metric must use base units
 func main() {
 
 	// todo 配置校验？
