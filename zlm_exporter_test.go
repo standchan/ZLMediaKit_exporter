@@ -1,14 +1,13 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"testing"
-	"time"
 
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
@@ -16,49 +15,78 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func setup(t *testing.T) {
-	r := gin.Default()
+var (
+	MockZlmServerPort    = "9999"
+	MockZlmServerAddr    = fmt.Sprintf("http://localhost:%s", MockZlmServerPort)
+	MockZlmServerSecret  = "test"
+	MockZlmServerHandler = gin.Default()
+)
+
+var (
+	TestClientCertFile = "testdata/tls/client-cert.pem"
+	TestClientKeyFile  = "testdata/tls/client-key.pem"
+	TestCaCertFile     = "testdata/tls/ca-cert.pem"
+	TestServerCertFile = "testdata/tls/server-cert.pem"
+	TestServerKeyFile  = "testdata/tls/server-key.pem"
+	TestTLSVersion     = "TLS1.2"
+)
+
+func setup() {
+	setupTLSTestFile()
+	setupZlmApiServer()
+}
+
+func setupZlmApiServer() {
+	r := TestServerHandler
 	r.GET("index/api/version", func(c *gin.Context) {
 		c.JSON(http.StatusOK, readTestData("version"))
 	})
 
 	r.GET("index/api/getApiList", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"code": 0, "data": []string{"api1", "api2"}})
+		c.JSON(http.StatusOK, readTestData("getApiList"))
 	})
 
 	r.GET("index/api/getThreadsLoad", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"code": 0, "data": 0.1})
+		c.JSON(http.StatusOK, readTestData("getThreadsLoad"))
 	})
 
 	r.GET("index/api/getWorkThreadsLoad", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"code": 0, "data": 0.2})
+		c.JSON(http.StatusOK, readTestData("getWorkThreadsLoad"))
 	})
 
 	r.GET("index/api/getStatistic", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"code": 0, "data": gin.H{"total_bytes": 1024}})
+		c.JSON(http.StatusOK, readTestData("getStatistic"))
 	})
 
 	r.GET("index/api/getServerConfig", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"code": 0, "data": gin.H{"server": "test_server"}})
+		c.JSON(http.StatusOK, readTestData("getServerConfig"))
 	})
 
 	r.GET("index/api/getAllSession", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"code": 0, "data": gin.H{"total": 10}})
+		c.JSON(http.StatusOK, readTestData("getAllSession"))
 	})
 
 	r.GET("index/api/getMediaList", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"code": 0, "data": gin.H{"total": 10}})
+		c.JSON(http.StatusOK, readTestData("getMediaList"))
 	})
 
 	r.GET("index/api/listRtpServer", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"code": 0, "data": gin.H{"total": 10}})
+		c.JSON(http.StatusOK, readTestData("listRtpServer"))
 	})
 
-	r.Run(":80")
+	r.Run(TestServerAddr)
+}
+
+func setupTLSTestFile() {
+	scriptPath := "scripts/generate-test-certs.sh"
+	cmd := exec.Command("/bin/bash", scriptPath)
+	err := cmd.Run()
+	if err != nil {
+		log.Fatal(err)
+	}
 }
 
 func readTestData(name string) map[string]any {
-
 	file, err := os.ReadFile(fmt.Sprintf("%s.json", name))
 	if err != nil {
 		log.Fatal(err)
@@ -239,52 +267,18 @@ func TestMetricsRegistration(t *testing.T) {
 	}
 }
 
-func TestServerStartupAndShutdown(t *testing.T) {
-	logger := logrus.New()
-	logger.SetLevel(logrus.DebugLevel)
-
-	options := Options{
-		ScrapeURI: "http://localhost:8080",
-	}
-	exporter, err := NewExporter(logger, options)
-	assert.NoError(t, err)
-	assert.NotNil(t, exporter)
-
-	srv := &http.Server{
-		Addr: ":9999",
-	}
-
-	go func() {
-		if err := srv.ListenAndServe(); err != http.ErrServerClosed {
-			t.Errorf("预期外的服务器错误: %v", err)
-		}
-	}()
-
-	time.Sleep(100 * time.Millisecond)
-
-	_, err = http.Get("http://localhost:9999")
-	assert.NoError(t, err)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	err = srv.Shutdown(ctx)
-	assert.NoError(t, err)
-
-	_, err = http.Get("http://localhost:9999")
-	assert.Error(t, err)
-}
-
 func TestServerTLSConfig(t *testing.T) {
+	setupTLSTestFile()
+	defer tearDown()
 	logger := logrus.New()
 	options := Options{
-		ScrapeURI:      "https://localhost:8080",
-		ClientCertFile: "test/client-cert.pem",
-		ClientKeyFile:  "test/client-key.pem",
-		CaCertFile:     "test/ca-cert.pem",
+		SkipTLSVerification: false,
+		ClientCertFile:      TestClientCertFile,
+		ClientKeyFile:       TestClientKeyFile,
+		CaCertFile:          TestCaCertFile,
 	}
 
-	exporter, err := NewExporter(logger, options)
+	exporter, err := NewExporter(TestServerAddr, TestServerSecret, logger, options)
 	assert.NoError(t, err)
 
 	tlsConfig := exporter.CreateClientTLSConfig()
@@ -292,45 +286,55 @@ func TestServerTLSConfig(t *testing.T) {
 	assert.False(t, tlsConfig.InsecureSkipVerify)
 
 	serverTLSConfig, err := exporter.CreateServerTLSConfig(
-		"testdata/tls/server-cert.pem",
-		"testdata/tls/server-key.pem",
-		"testdata/tls/ca-cert.pem",
-		"TLS1.2",
+		TestServerCertFile,
+		TestServerKeyFile,
+		TestCaCertFile,
+		TestTLSVersion,
 	)
 	assert.NoError(t, err)
 	assert.NotNil(t, serverTLSConfig)
+
 }
 
 func TestGetServerCertificateFunc(t *testing.T) {
-	certFunc := GetServerCertificateFunc("test/server-cert.pem", "test/server-key.pem")
+	setupTLSTestFile()
+	defer tearDown()
+	certFunc := GetServerCertificateFunc(TestServerCertFile, TestServerKeyFile)
 	assert.NotNil(t, certFunc)
+	cert, err := certFunc(nil)
+	assert.NoError(t, err)
+	assert.NotNil(t, cert)
 }
 
 func TestGetConfigForClientFunc(t *testing.T) {
+	setupTLSTestFile()
+	defer tearDown()
 	configFunc := GetConfigForClientFunc(
-		"test/server-cert.pem",
-		"test/server-key.pem",
-		"test/ca-cert.pem",
+		TestServerCertFile,
+		TestServerKeyFile,
+		TestCaCertFile,
 	)
 	assert.NotNil(t, configFunc)
-
-	// 注意：这里我们不测试实际的配置加载，因为测试文件可能不存在
-	// 实际项目中应该提供测试证书文件
+	config, err := configFunc(nil)
+	assert.NoError(t, err)
+	assert.NotNil(t, config)
 }
 
 func TestLoadKeyPair(t *testing.T) {
 	_, err := LoadKeyPair("invalid-cert.pem", "invalid-key.pem")
 	assert.Error(t, err)
-
-	// 注意：实际项目中应该提供有效的测试证书文件进行测试
 }
 
 func TestLoadCAFile(t *testing.T) {
-	// 测试无效的 CA 文件
 	_, err := LoadCAFile("invalid-ca.pem")
 	assert.Error(t, err)
+}
 
-	// 注意：实际项目中应该提供有效的测试 CA 文件进行测试
+func TestServer(t *testing.T) {
+	setupZlmApiServer()
+	// 测试整个流程
+	main()
+	defer tearDown()
 }
 
 func tearDown() {

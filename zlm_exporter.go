@@ -32,9 +32,6 @@ import (
 
 // git log -1 --format=%cd --date=format:'%Y%m%d' | tr -d '\n'
 // todo: 考虑zlm版本更迭的api字段变动和废弃问题；可以用丢弃指标的方式来处理？
-// todo: 提供所有的指标的文本版本
-// todo: 提供grafana的演示地址
-// todo：考虑暴露 metric 演示url
 const (
 	namespace               = "zlmediakit"
 	subsystemVersion        = "version"
@@ -136,9 +133,10 @@ var (
 )
 
 type Exporter struct {
-	URI    string
-	client http.Client
-	mutex  sync.RWMutex
+	scrapeURI    string
+	scrapeSecret string
+	client       http.Client
+	mutex        sync.RWMutex
 
 	up                prometheus.Gauge
 	totalScrapes      prometheus.Counter
@@ -150,7 +148,6 @@ type Exporter struct {
 }
 
 type Options struct {
-	ScrapeURI      string
 	ClientCertFile string
 	ClientKeyFile  string
 
@@ -221,9 +218,18 @@ func LoadCAFile(caFile string) (*x509.CertPool, error) {
 	return pool, nil
 }
 
-func NewExporter(logger *logrus.Logger, options Options) (*Exporter, error) {
+func NewExporter(uri string, secret string, logger *logrus.Logger, options Options) (*Exporter, error) {
+	if uri == "" {
+		return nil, fmt.Errorf("zlMediaKit uri is required")
+	}
+
+	if secret == "" {
+		return nil, fmt.Errorf("zlMediaKit secret is required")
+	}
+
 	exporter := &Exporter{
-		URI: options.ScrapeURI,
+		scrapeURI:    uri,
+		scrapeSecret: secret,
 
 		up: prometheus.NewGauge(prometheus.GaugeOpts{
 			Namespace: namespace,
@@ -385,7 +391,7 @@ func (e *Exporter) mustNewConstMetric(desc *prometheus.Desc, valueType prometheu
 }
 
 func (e *Exporter) fetchHTTP(ch chan<- prometheus.Metric, endpoint string, processFunc func(closer io.ReadCloser) error) {
-	uri := fmt.Sprintf("%s/%s", e.URI, endpoint)
+	uri := fmt.Sprintf("%s/%s", e.scrapeURI, endpoint)
 	parsedURL, err := url.Parse(uri)
 	if err != nil {
 		scrapeErrors.WithLabelValues(endpoint).Inc()
@@ -397,7 +403,7 @@ func (e *Exporter) fetchHTTP(ch chan<- prometheus.Metric, endpoint string, proce
 		Method: http.MethodGet,
 		URL:    parsedURL,
 		Header: http.Header{
-			"secret": []string{*zlmSecret},
+			"secret": []string{e.scrapeSecret},
 		},
 	}
 
@@ -731,7 +737,7 @@ var (
 	zlmScrapeURI   = kingpin.Flag("scrape-uri", "URI on which to scrape zlmediakit.").Default(getEnv("ZLM_EXPORTER_SCRAPE_URI", "http://localhost")).String()
 	zlmScrapePath  = kingpin.Flag("metric-path", "Path under which to expose metrics.").Default(getEnv("ZLM_EXPORTER_METRICS_PATH", "/metrics")).String()
 	zlmSecret      = kingpin.Flag("secret", "Secret for the scrape URI").Default(getEnv("ZLM_EXPORTER_SECRET", "")).String()
-	zlmMetricsOnly = kingpin.Flag("metrics-only", "Only export metrics, not key-value metrics").Default(getEnv("ZLM_EXPORTER_METRICS_ONLY", "true")).Bool()
+	zlmMetricsOnly = kingpin.Flag("metrics-only", "Only export metrics, not other key-value metrics").Default(getEnv("ZLM_EXPORTER_METRICS_ONLY", "true")).Bool()
 
 	logFormat = kingpin.Flag("log-format", "Log format, valid options are txt and json").Default(getEnv("ZLM_EXPORTER_LOG_FORMAT", "txt")).String()
 	logLevel  = kingpin.Flag("log-level", "Log level, valid options are debug, info, warn, error, fatal, panic").Default(getEnv("ZLM_EXPORTER_LOG_LEVEL", "info")).String()
@@ -744,6 +750,7 @@ var (
 	tlsServerKeyFile    = kingpin.Flag("tls-server-key-file", "Path to the server key file").Default(getEnv("ZLM_EXPORTER_TLS_SERVER_KEY_FILE", "")).String()
 	tlsServerCertFile   = kingpin.Flag("tls-server-cert-file", "Path to the server certificate file").Default(getEnv("ZLM_EXPORTER_TLS_SERVER_CERT_FILE", "")).String()
 	tlsServerCaCertFile = kingpin.Flag("tls-server-ca-cert-file", "Path to the server CA certificate file").Default(getEnv("ZLM_EXPORTER_TLS_SERVER_CA_CERT_FILE", "")).String()
+
 	tlsServerMinVersion = kingpin.Flag("tls-server-min-version", "Minimum TLS version supported").Default(getEnv("ZLM_EXPORTER_TLS_SERVER_MIN_VERSION", "")).String()
 	skipTLSVerification = kingpin.Flag("tls-skip-verify", "Skip TLS verification").Default(getEnv("ZLM_EXPORTER_TLS_SKIP_VERIFY", "false")).Bool()
 )
@@ -762,7 +769,7 @@ func main() {
 
 	log := newLogger(*logFormat, *logLevel)
 
-	log.Printf("Redis Metrics Exporter %s    build date: %s    sha1: %s    Go: %s    GOOS: %s    GOARCH: %s",
+	log.Printf("ZLMediaKit Metrics Exporter %s    build date: %s    sha1: %s    Go: %s    GOOS: %s    GOARCH: %s",
 		BuildVersion, BuildDate, BuildCommitSha,
 		runtime.Version(),
 		runtime.GOOS,
@@ -770,8 +777,6 @@ func main() {
 	)
 
 	option := Options{
-		ScrapeURI: *zlmScrapeURI,
-
 		CaCertFile: *tlsCACertFile,
 
 		ClientCertFile: *tlsClientCertFile,
@@ -782,7 +787,7 @@ func main() {
 		SkipTLSVerification: *skipTLSVerification,
 	}
 
-	exporter, err := NewExporter(log, option)
+	exporter, err := NewExporter(*zlmScrapeURI, *zlmSecret, log, option)
 	if err != nil {
 		log.Fatalln("msg", "Error creating exporter", "err", err)
 	}
@@ -829,7 +834,6 @@ func main() {
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
 
-		// Shutdown zlm_exporter gracefully
 		if err := srv.Shutdown(ctx); err != nil {
 			log.Fatalf("zlm_exporter shutdown failed: %v", err)
 		}
