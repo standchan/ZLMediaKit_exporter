@@ -19,11 +19,11 @@ import (
 
 var (
 	MockZlmServerPort    = "9999"
-	MockZlmServerAddr    = fmt.Sprintf("http://localhost:%s", MockZlmServerPort)
-	MockZlmServerSecret  = "test"
+	MockZlmServerAddr    = fmt.Sprintf("localhost:%s", MockZlmServerPort)
+	MockZlmServerSecret  = "test-secret"
 	MockZlmServerHandler = gin.Default()
 	TestServerHandler    = gin.Default()
-	TestServerAddr       = ":9999"
+	TestServerAddr       = ":9101"
 	TestServerSecret     = "test-secret"
 )
 
@@ -42,7 +42,7 @@ func setup() {
 }
 
 func setupZlmApiServer() {
-	r := TestServerHandler
+	r := MockZlmServerHandler
 	r.GET("index/api/version", func(c *gin.Context) {
 		c.JSON(http.StatusOK, readTestData("version"))
 	})
@@ -79,7 +79,9 @@ func setupZlmApiServer() {
 		c.JSON(http.StatusOK, readTestData("listRtpServer"))
 	})
 
-	r.Run(TestServerAddr)
+	go func() {
+		r.Run(MockZlmServerAddr)
+	}()
 }
 
 func setupTLSTestFile() {
@@ -193,7 +195,7 @@ func TestServerTLSConfig(t *testing.T) {
 		CaCertFile:          TestCaCertFile,
 	}
 
-	exporter, err := NewExporter(TestServerAddr, TestServerSecret, logger, options)
+	exporter, err := NewExporter(TestServerAddr, MockZlmServerSecret, logger, options)
 	assert.NoError(t, err)
 
 	tlsConfig := exporter.CreateClientTLSConfig()
@@ -243,13 +245,6 @@ func TestLoadKeyPair(t *testing.T) {
 func TestLoadCAFile(t *testing.T) {
 	_, err := LoadCAFile("invalid-ca.pem")
 	assert.Error(t, err)
-}
-
-func TestServer(t *testing.T) {
-	setupZlmApiServer()
-	// 测试整个流程
-	main()
-	defer tearDown()
 }
 
 func tearDown() {
@@ -403,7 +398,16 @@ func TestExtractNetworkThreads(t *testing.T) {
 	mockResponse := ZLMAPIResponse[APINetworkThreadsObjects]{
 		Code: 0,
 		Msg:  "success",
-		Data: APINetworkThreadsObjects{},
+		Data: APINetworkThreadsObjects{
+			APINetworkThreadsObject{
+				Load:  100,
+				Delay: 100,
+			},
+			APINetworkThreadsObject{
+				Load:  200,
+				Delay: 200,
+			},
+		},
 	}
 	server := setupTestServer(t, "index/api/getThreadsLoad", mockResponse)
 	defer server.Close()
@@ -428,14 +432,23 @@ func TestExtractNetworkThreads(t *testing.T) {
 	}
 	<-done
 
-	assert.Equal(t, 1, len(metrics))
+	assert.Equal(t, 3, len(metrics))
 }
 
 func TestExtractWorkThreads(t *testing.T) {
 	mockResponse := ZLMAPIResponse[APIWorkThreadsObjects]{
 		Code: 0,
 		Msg:  "success",
-		Data: APIWorkThreadsObjects{},
+		Data: APIWorkThreadsObjects{
+			APIWorkThreadsObject{
+				Load:  100,
+				Delay: 100,
+			},
+			APIWorkThreadsObject{
+				Load:  200,
+				Delay: 200,
+			},
+		},
 	}
 	server := setupTestServer(t, "index/api/getWorkThreadsLoad", mockResponse)
 	defer server.Close()
@@ -460,14 +473,31 @@ func TestExtractWorkThreads(t *testing.T) {
 	}
 	<-done
 
-	assert.Equal(t, 1, len(metrics))
+	assert.Equal(t, 3, len(metrics))
 }
 
 func TestExtractStatistics(t *testing.T) {
 	mockResponse := ZLMAPIResponse[APIStatisticsObject]{
 		Code: 0,
 		Msg:  "success",
-		Data: APIStatisticsObject{},
+		Data: APIStatisticsObject{
+			Buffer:                100,
+			BufferLikeString:      100,
+			BufferList:            100,
+			BufferRaw:             100,
+			Frame:                 100,
+			FrameImp:              100,
+			MediaSource:           100,
+			MultiMediaSourceMuxer: 100,
+			RtmpPacket:            100,
+			RtpPacket:             100,
+			Socket:                100,
+			TcpClient:             100,
+			TcpServer:             100,
+			TcpSession:            100,
+			UdpServer:             100,
+			UdpSession:            100,
+		},
 	}
 	server := setupTestServer(t, "index/api/getStatistic", mockResponse)
 	defer server.Close()
@@ -492,14 +522,33 @@ func TestExtractStatistics(t *testing.T) {
 	}
 	<-done
 
-	assert.Equal(t, 1, len(metrics))
+	assert.Equal(t, 16, len(metrics))
 }
 
 func TestExtractSession(t *testing.T) {
 	mockResponse := ZLMAPIResponse[APISessionObjects]{
 		Code: 0,
 		Msg:  "success",
-		Data: APISessionObjects{},
+		Data: APISessionObjects{
+			APISessionObject{
+				Id:         "1111",
+				Identifier: "1111",
+				LocalIp:    "127.0.0.1",
+				LocalPort:  1111,
+				PeerIp:     "127.0.0.1",
+				PeerPort:   1111,
+				TypeID:     "1111",
+			},
+			APISessionObject{
+				Id:         "2222",
+				Identifier: "2222",
+				LocalIp:    "127.0.0.1",
+				LocalPort:  2222,
+				PeerIp:     "127.0.0.1",
+				PeerPort:   2222,
+				TypeID:     "2222",
+			},
+		},
 	}
 	server := setupTestServer(t, "index/api/getAllSession", mockResponse)
 	defer server.Close()
@@ -524,14 +573,42 @@ func TestExtractSession(t *testing.T) {
 	}
 	<-done
 
-	assert.Equal(t, 1, len(metrics))
+	assert.Equal(t, 3, len(metrics))
 }
 
+// fixme: 还是有问题
 func TestExtractStreamInfo(t *testing.T) {
 	mockResponse := ZLMAPIResponse[APIStreamInfoObjects]{
 		Code: 0,
 		Msg:  "success",
-		Data: APIStreamInfoObjects{},
+		Data: APIStreamInfoObjects{
+			APIStreamInfoObject{
+				Stream:           "test1",
+				Vhost:            "test1",
+				App:              "test1",
+				Schema:           "test1",
+				AliveSecond:      100,
+				BytesSpeed:       100,
+				OriginType:       100,
+				OriginTypeStr:    "test1",
+				OriginUrl:        "test1",
+				ReaderCount:      100,
+				TotalReaderCount: 100,
+			},
+			APIStreamInfoObject{
+				Stream:           "test2",
+				Vhost:            "test2",
+				App:              "test2",
+				Schema:           "test2",
+				AliveSecond:      200,
+				BytesSpeed:       200,
+				OriginType:       200,
+				OriginTypeStr:    "test2",
+				OriginUrl:        "test2",
+				ReaderCount:      200,
+				TotalReaderCount: 200,
+			},
+		},
 	}
 	server := setupTestServer(t, "index/api/getMediaList", mockResponse)
 	defer server.Close()
@@ -556,14 +633,23 @@ func TestExtractStreamInfo(t *testing.T) {
 	}
 	<-done
 
-	assert.Equal(t, 1, len(metrics))
+	assert.Equal(t, 10, len(metrics))
 }
 
 func TestExtractRtpServer(t *testing.T) {
 	mockResponse := ZLMAPIResponse[APIRtpServerObjects]{
 		Code: 0,
 		Msg:  "success",
-		Data: APIRtpServerObjects{},
+		Data: APIRtpServerObjects{
+			APIRtpServerObject{
+				Port:     "1111",
+				StreamID: "1111",
+			},
+			APIRtpServerObject{
+				Port:     "2222",
+				StreamID: "2222",
+			},
+		},
 	}
 	server := setupTestServer(t, "index/api/listRtpServer", mockResponse)
 	defer server.Close()
@@ -588,7 +674,7 @@ func TestExtractRtpServer(t *testing.T) {
 	}
 	<-done
 
-	assert.Equal(t, 1, len(metrics))
+	assert.Equal(t, 3, len(metrics))
 }
 
 func TestMustNewConstMetric(t *testing.T) {

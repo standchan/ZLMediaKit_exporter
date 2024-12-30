@@ -675,7 +675,7 @@ func (e *Exporter) extractStream(ch chan<- prometheus.Metric) {
 			ch <- prometheus.MustNewConstMetric(StreamBandwidths,
 				prometheus.GaugeValue,
 				stream.BytesSpeed,
-				stream.Vhost, stream.App, stream.Stream, stream.Schema)
+				stream.Vhost, stream.App, stream.Stream, stream.Schema, stream.OriginTypeStr)
 		}
 
 		return nil
