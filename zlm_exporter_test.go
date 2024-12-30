@@ -399,6 +399,198 @@ func TestExtractAPIStatus(t *testing.T) {
 	assert.Equal(t, 2, len(metrics))
 }
 
+func TestExtractNetworkThreads(t *testing.T) {
+	mockResponse := ZLMAPIResponse[APINetworkThreadsObjects]{
+		Code: 0,
+		Msg:  "success",
+		Data: APINetworkThreadsObjects{},
+	}
+	server := setupTestServer(t, "index/api/getThreadsLoad", mockResponse)
+	defer server.Close()
+
+	logger := logrus.New()
+	options := Options{}
+	exporter, err := NewExporter(server.URL, "test-secret", logger, options)
+	assert.NoError(t, err)
+
+	ch := make(chan prometheus.Metric, 1)
+	done := make(chan bool)
+
+	go func() {
+		exporter.extractNetworkThreads(ch)
+		close(ch)
+		done <- true
+	}()
+
+	metrics := make([]prometheus.Metric, 0)
+	for metric := range ch {
+		metrics = append(metrics, metric)
+	}
+	<-done
+
+	assert.Equal(t, 1, len(metrics))
+}
+
+func TestExtractWorkThreads(t *testing.T) {
+	mockResponse := ZLMAPIResponse[APIWorkThreadsObjects]{
+		Code: 0,
+		Msg:  "success",
+		Data: APIWorkThreadsObjects{},
+	}
+	server := setupTestServer(t, "index/api/getWorkThreadsLoad", mockResponse)
+	defer server.Close()
+
+	logger := logrus.New()
+	options := Options{}
+	exporter, err := NewExporter(server.URL, "test-secret", logger, options)
+	assert.NoError(t, err)
+
+	ch := make(chan prometheus.Metric, 1)
+	done := make(chan bool)
+
+	go func() {
+		exporter.extractWorkThreads(ch)
+		close(ch)
+		done <- true
+	}()
+
+	metrics := make([]prometheus.Metric, 0)
+	for metric := range ch {
+		metrics = append(metrics, metric)
+	}
+	<-done
+
+	assert.Equal(t, 1, len(metrics))
+}
+
+func TestExtractStatistics(t *testing.T) {
+	mockResponse := ZLMAPIResponse[APIStatisticsObject]{
+		Code: 0,
+		Msg:  "success",
+		Data: APIStatisticsObject{},
+	}
+	server := setupTestServer(t, "index/api/getStatistic", mockResponse)
+	defer server.Close()
+
+	logger := logrus.New()
+	options := Options{}
+	exporter, err := NewExporter(server.URL, "test-secret", logger, options)
+	assert.NoError(t, err)
+
+	ch := make(chan prometheus.Metric, 1)
+	done := make(chan bool)
+
+	go func() {
+		exporter.extractStatistics(ch)
+		close(ch)
+		done <- true
+	}()
+
+	metrics := make([]prometheus.Metric, 0)
+	for metric := range ch {
+		metrics = append(metrics, metric)
+	}
+	<-done
+
+	assert.Equal(t, 1, len(metrics))
+}
+
+func TestExtractSession(t *testing.T) {
+	mockResponse := ZLMAPIResponse[APISessionObjects]{
+		Code: 0,
+		Msg:  "success",
+		Data: APISessionObjects{},
+	}
+	server := setupTestServer(t, "index/api/getAllSession", mockResponse)
+	defer server.Close()
+
+	logger := logrus.New()
+	options := Options{}
+	exporter, err := NewExporter(server.URL, "test-secret", logger, options)
+	assert.NoError(t, err)
+
+	ch := make(chan prometheus.Metric, 1)
+	done := make(chan bool)
+
+	go func() {
+		exporter.extractSession(ch)
+		close(ch)
+		done <- true
+	}()
+
+	metrics := make([]prometheus.Metric, 0)
+	for metric := range ch {
+		metrics = append(metrics, metric)
+	}
+	<-done
+
+	assert.Equal(t, 1, len(metrics))
+}
+
+func TestExtractStreamInfo(t *testing.T) {
+	mockResponse := ZLMAPIResponse[APIStreamInfoObjects]{
+		Code: 0,
+		Msg:  "success",
+		Data: APIStreamInfoObjects{},
+	}
+	server := setupTestServer(t, "index/api/getMediaList", mockResponse)
+	defer server.Close()
+
+	logger := logrus.New()
+	options := Options{}
+	exporter, err := NewExporter(server.URL, "test-secret", logger, options)
+	assert.NoError(t, err)
+
+	ch := make(chan prometheus.Metric, 1)
+	done := make(chan bool)
+
+	go func() {
+		exporter.extractStream(ch)
+		close(ch)
+		done <- true
+	}()
+
+	metrics := make([]prometheus.Metric, 0)
+	for metric := range ch {
+		metrics = append(metrics, metric)
+	}
+	<-done
+
+	assert.Equal(t, 1, len(metrics))
+}
+
+func TestExtractRtpServer(t *testing.T) {
+	mockResponse := ZLMAPIResponse[APIRtpServerObjects]{
+		Code: 0,
+		Msg:  "success",
+		Data: APIRtpServerObjects{},
+	}
+	server := setupTestServer(t, "index/api/listRtpServer", mockResponse)
+	defer server.Close()
+
+	logger := logrus.New()
+	options := Options{}
+	exporter, err := NewExporter(server.URL, "test-secret", logger, options)
+	assert.NoError(t, err)
+
+	ch := make(chan prometheus.Metric, 1)
+	done := make(chan bool)
+
+	go func() {
+		exporter.extractRtp(ch)
+		close(ch)
+		done <- true
+	}()
+
+	metrics := make([]prometheus.Metric, 0)
+	for metric := range ch {
+		metrics = append(metrics, metric)
+	}
+	<-done
+
+	assert.Equal(t, 1, len(metrics))
+}
+
 func TestMustNewConstMetric(t *testing.T) {
 	logger := logrus.New()
 	options := Options{}
