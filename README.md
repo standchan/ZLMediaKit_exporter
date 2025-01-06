@@ -29,7 +29,7 @@ go build
 
 |  Name                      | Description                               | default  |
 |-------------------------   |-------------------------------------------|----------|
-| `ZLM_EXPORTER_SCRAPE_URI`  | URI on which to scrape zlmediakit.       |  http://localhost  |
+| `ZLM_EXPORTER_SCRAPE_URI`  | URI on which to scrape zlmediakit metrics.       |  http://localhost  |
 | `ZLM_EXPORTER_METRICS_PATH`| Path under which to expose metrics. |  /metrics |
 | `ZLM_EXPORTER_SECRET`      | Secret for the scrape URI            |        |
 | `ZLM_EXPORTER_LOG_FORMAT`  | Log format, valid options are txt and json | txt |
