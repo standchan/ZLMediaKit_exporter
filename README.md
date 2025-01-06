@@ -19,7 +19,9 @@ Prometheus exporter for [ZLMediaKit](https://github.com/ZLMediaKit/ZLMediaKit) m
 
 ### Source
 ```shell
-go get -u github.com/standchan/zlm_exporter
+git clone https://github.com/standchan/zlm_exporter
+cd zlm_exporter
+go build
 ```
 
 ## Environment Variables
@@ -78,6 +80,10 @@ We are happy to receive your feedback and contributions.
 
 ## Thanks
 [ZLMediaKit](https://github.com/ZLMediaKit/ZLMediaKit)
-[jetbrains](https://www.jetbrains.com/)
+[JetBrains](https://www.jetbrains.com/)
+[redis_exporter](https://github.com/oliver006/redis_exporter)
+[haproxy_exporter](https://github.com/prometheus/haproxy_exporter)
+[Prometheus](https://prometheus.io/)
+[Cursor](https://www.cursor.com/)
 
-jetbrains provides great IDEs for development
+JetBrains/Cursor provides great IDE for coding.
