@@ -3,19 +3,25 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/gin-gonic/gin"
 )
 
+// most of unittest powered by cursor
+// it still has some issues
 var (
 	MockZlmServerPort    = "9999"
 	MockZlmServerAddr    = fmt.Sprintf("localhost:%s", MockZlmServerPort)
@@ -25,15 +31,6 @@ var (
 	TestServerHandler = gin.Default()
 	TestServerAddr    = ":9101"
 	TestServerSecret  = "test-secret"
-)
-
-var (
-	TestClientCertFile = "testdata/tls/client-cert.pem"
-	TestClientKeyFile  = "testdata/tls/client-key.pem"
-	TestCaCertFile     = "testdata/tls/ca-cert.pem"
-	TestServerCertFile = "testdata/tls/server-cert.pem"
-	TestServerKeyFile  = "testdata/tls/server-key.pem"
-	TestTLSVersion     = "TLS1.2"
 )
 
 func setup() {
@@ -84,13 +81,216 @@ func setupZlmApiServer() {
 }
 
 func readTestData(name string) map[string]any {
-	file, err := os.ReadFile(fmt.Sprintf("%s.json", name))
+	file, err := os.ReadFile(fmt.Sprintf("testdata/api/%s.json", name))
 	if err != nil {
 		log.Fatal(err)
 	}
 	var fileJson map[string]any
 	json.Unmarshal(file, &fileJson)
 	return fileJson
+}
+
+func TestMetricsDescribe(t *testing.T) {
+	tests := []struct {
+		name          string
+		metricsCount  int
+		includeUpDesc bool
+	}{
+		{
+			name:          "verify all metrics",
+			metricsCount:  len(metrics) + 2,
+			includeUpDesc: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			logger := logrus.New()
+			options := Options{}
+			exporter, err := NewExporter("http://localhost", MockZlmServerSecret, logger, options)
+			assert.NoError(t, err)
+
+			ch := make(chan *prometheus.Desc, tt.metricsCount)
+			done := make(chan bool)
+
+			go func() {
+				exporter.Describe(ch)
+				close(ch)
+				done <- true
+			}()
+
+			descriptions := make([]*prometheus.Desc, 0)
+			for desc := range ch {
+				descriptions = append(descriptions, desc)
+			}
+			<-done
+
+			assert.Equal(t, tt.metricsCount, len(descriptions), "metrics description count not match")
+
+			descMap := make(map[string]bool)
+			for _, desc := range descriptions {
+				descMap[desc.String()] = true
+			}
+
+			for _, metric := range metrics {
+				assert.True(t, descMap[metric.String()], "missing metric description: %s", metric.String())
+			}
+
+			assert.True(t, descMap[exporter.up.Desc().String()], "missing up metric description")
+			assert.True(t, descMap[exporter.totalScrapes.Desc().String()], "missing totalScrapes metric description")
+
+			keyMetrics := []struct {
+				name     string
+				desc     *prometheus.Desc
+				expected bool
+			}{
+				{"ZLMediaKitInfo", ZLMediaKitInfo, true},
+				{"ApiStatus", ApiStatus, true},
+				{"NetworkThreadsTotal", NetworkThreadsTotal, true},
+				{"StreamsInfo", StreamsInfo, true},
+				{"SessionInfo", SessionInfo, true},
+				{"RtpServerInfo", RtpServerInfo, true},
+			}
+
+			for _, km := range keyMetrics {
+				assert.True(t, descMap[km.desc.String()], "missing key metric description: %s", km.name)
+			}
+		})
+	}
+}
+
+func TestMetricsCollect(t *testing.T) {
+	setup()
+	tests := []struct {
+		name          string
+		metricsCount  int
+		includeUpDesc bool
+	}{
+		// todo jerry-rig
+		{
+			name:          "verify all metrics",
+			metricsCount:  2,
+			includeUpDesc: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			logger := logrus.New()
+			options := Options{}
+			exporter, err := NewExporter(MockZlmServerAddr, MockZlmServerSecret, logger, options)
+			assert.NoError(t, err)
+
+			ch := make(chan prometheus.Metric, tt.metricsCount)
+			done := make(chan bool)
+
+			go func() {
+				exporter.Collect(ch)
+				close(ch)
+				done <- true
+			}()
+
+			<-done
+
+			metrics := make([]prometheus.Metric, 0)
+			for metric := range ch {
+				metrics = append(metrics, metric)
+			}
+
+			assert.Equal(t, tt.metricsCount, len(metrics), "metrics count not match")
+		})
+	}
+}
+
+func TestFetchHTTPErrorHandling(t *testing.T) {
+	tests := []struct {
+		name          string
+		responseCode  int
+		responseBody  string
+		expectedError bool
+	}{
+		{
+			name:          "success response",
+			responseCode:  http.StatusOK,
+			responseBody:  `{"code": 0, "msg": "success", "data": {}}`,
+			expectedError: false,
+		},
+		{
+			name:          "invalid json response",
+			responseCode:  http.StatusOK,
+			responseBody:  `invalid json`,
+			expectedError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(tt.responseCode)
+				w.Write([]byte(tt.responseBody))
+			}))
+			defer server.Close()
+
+			logger := logrus.New()
+			options := Options{}
+			exporter, err := NewExporter(server.URL, MockZlmServerSecret, logger, options)
+			assert.NoError(t, err)
+
+			ch := make(chan prometheus.Metric, 1)
+			endpoint := "test/endpoint"
+
+			processFunc := func(closer io.ReadCloser) error {
+				var result map[string]interface{}
+				if err := json.NewDecoder(closer).Decode(&result); err != nil {
+					return err
+				}
+				return nil
+			}
+
+			// 执行请求
+			exporter.fetchHTTP(ch, endpoint, processFunc)
+
+			// 验证错误计数
+			errorCount := testutil.ToFloat64(scrapeErrors.WithLabelValues(endpoint))
+			if tt.expectedError {
+				assert.Greater(t, errorCount, float64(0), "expected error but not recorded")
+			} else {
+				assert.Equal(t, float64(0), errorCount, "unexpected error recorded")
+			}
+		})
+	}
+}
+
+func TestFetchHTTPConcurrency(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(100 * time.Millisecond)
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"code": 0, "msg": "success", "data": {}}`))
+	}))
+	defer server.Close()
+
+	logger := logrus.New()
+	options := Options{}
+	exporter, err := NewExporter(server.URL, MockZlmServerSecret, logger, options)
+	assert.NoError(t, err)
+
+	ch := make(chan prometheus.Metric, 10)
+	var wg sync.WaitGroup
+	concurrentRequests := 5
+
+	for i := 0; i < concurrentRequests; i++ {
+		wg.Add(1)
+		go func(index int) {
+			defer wg.Done()
+			endpoint := fmt.Sprintf("test/endpoint/%d", index)
+			processFunc := func(closer io.ReadCloser) error {
+				return nil
+			}
+			exporter.fetchHTTP(ch, endpoint, processFunc)
+		}(i)
+	}
+
+	wg.Wait()
 }
 
 func TestMetricsRegistration(t *testing.T) {
@@ -188,13 +388,13 @@ func TestNewExporter(t *testing.T) {
 		{
 			name:        "有效的URI和Secret",
 			uri:         "http://localhost:8080",
-			secret:      "test-secret",
+			secret:      MockZlmServerSecret,
 			shouldError: false,
 		},
 		{
 			name:        "空URI",
 			uri:         "",
-			secret:      "test-secret",
+			secret:      MockZlmServerSecret,
 			shouldError: true,
 		},
 		{
@@ -224,10 +424,8 @@ func TestNewExporter(t *testing.T) {
 
 func setupTestServer(t *testing.T, endpoint string, response interface{}) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// 验证请求头中的secret
 		assert.Equal(t, "test-secret", r.Header.Get("secret"))
 
-		// 返回模拟响应
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(response)
 	}))
@@ -249,10 +447,9 @@ func TestExtractVersion(t *testing.T) {
 
 	logger := logrus.New()
 	options := Options{}
-	exporter, err := NewExporter(server.URL, "test-secret", logger, options)
+	exporter, err := NewExporter(server.URL, MockZlmServerSecret, logger, options)
 	assert.NoError(t, err)
 
-	// 创建一个通道来接收指标
 	ch := make(chan prometheus.Metric, 1)
 	done := make(chan bool)
 
@@ -262,7 +459,6 @@ func TestExtractVersion(t *testing.T) {
 		done <- true
 	}()
 
-	// 验证收到的指标
 	metrics := make([]prometheus.Metric, 0)
 	for metric := range ch {
 		metrics = append(metrics, metric)
@@ -287,7 +483,7 @@ func TestExtractAPIStatus(t *testing.T) {
 
 	logger := logrus.New()
 	options := Options{}
-	exporter, err := NewExporter(server.URL, "test-secret", logger, options)
+	exporter, err := NewExporter(server.URL, MockZlmServerSecret, logger, options)
 	assert.NoError(t, err)
 
 	ch := make(chan prometheus.Metric, 2)
@@ -328,7 +524,7 @@ func TestExtractNetworkThreads(t *testing.T) {
 
 	logger := logrus.New()
 	options := Options{}
-	exporter, err := NewExporter(server.URL, "test-secret", logger, options)
+	exporter, err := NewExporter(server.URL, MockZlmServerSecret, logger, options)
 	assert.NoError(t, err)
 
 	ch := make(chan prometheus.Metric, 1)
@@ -369,7 +565,7 @@ func TestExtractWorkThreads(t *testing.T) {
 
 	logger := logrus.New()
 	options := Options{}
-	exporter, err := NewExporter(server.URL, "test-secret", logger, options)
+	exporter, err := NewExporter(server.URL, MockZlmServerSecret, logger, options)
 	assert.NoError(t, err)
 
 	ch := make(chan prometheus.Metric, 1)
@@ -418,7 +614,7 @@ func TestExtractStatistics(t *testing.T) {
 
 	logger := logrus.New()
 	options := Options{}
-	exporter, err := NewExporter(server.URL, "test-secret", logger, options)
+	exporter, err := NewExporter(server.URL, MockZlmServerSecret, logger, options)
 	assert.NoError(t, err)
 
 	ch := make(chan prometheus.Metric, 1)
@@ -469,7 +665,7 @@ func TestExtractSession(t *testing.T) {
 
 	logger := logrus.New()
 	options := Options{}
-	exporter, err := NewExporter(server.URL, "test-secret", logger, options)
+	exporter, err := NewExporter(server.URL, MockZlmServerSecret, logger, options)
 	assert.NoError(t, err)
 
 	ch := make(chan prometheus.Metric, 1)
@@ -490,7 +686,6 @@ func TestExtractSession(t *testing.T) {
 	assert.Equal(t, 3, len(metrics))
 }
 
-// fixme: 还是有问题
 func TestExtractStreamInfo(t *testing.T) {
 	mockResponse := ZLMAPIResponse[APIStreamInfoObjects]{
 		Code: 0,
@@ -529,7 +724,7 @@ func TestExtractStreamInfo(t *testing.T) {
 
 	logger := logrus.New()
 	options := Options{}
-	exporter, err := NewExporter(server.URL, "test-secret", logger, options)
+	exporter, err := NewExporter(server.URL, MockZlmServerSecret, logger, options)
 	assert.NoError(t, err)
 
 	ch := make(chan prometheus.Metric, 1)
@@ -570,7 +765,7 @@ func TestExtractRtpServer(t *testing.T) {
 
 	logger := logrus.New()
 	options := Options{}
-	exporter, err := NewExporter(server.URL, "test-secret", logger, options)
+	exporter, err := NewExporter(server.URL, MockZlmServerSecret, logger, options)
 	assert.NoError(t, err)
 
 	ch := make(chan prometheus.Metric, 1)
@@ -594,7 +789,7 @@ func TestExtractRtpServer(t *testing.T) {
 func TestMustNewConstMetric(t *testing.T) {
 	logger := logrus.New()
 	options := Options{}
-	exporter, err := NewExporter("http://localhost", "test-secret", logger, options)
+	exporter, err := NewExporter("http://localhost", MockZlmServerSecret, logger, options)
 	assert.NoError(t, err)
 
 	tests := []struct {
@@ -603,22 +798,22 @@ func TestMustNewConstMetric(t *testing.T) {
 		shouldBeNil bool
 	}{
 		{
-			name:        "float64值",
+			name:        "float64",
 			value:       float64(123.45),
 			shouldBeNil: false,
 		},
 		{
-			name:        "字符串数字",
+			name:        "string",
 			value:       "123.45",
 			shouldBeNil: false,
 		},
 		{
-			name:        "非数字字符串",
+			name:        "non-numeric string",
 			value:       "abc",
 			shouldBeNil: false,
 		},
 		{
-			name:        "其他类型",
+			name:        "other type",
 			value:       struct{}{},
 			shouldBeNil: true,
 		},
@@ -648,7 +843,7 @@ func TestGetEnv(t *testing.T) {
 		shouldSetEnv bool
 	}{
 		{
-			name:         "环境变量存在",
+			name:         "env exists",
 			key:          "TEST_ENV_1",
 			defaultVal:   "default",
 			envValue:     "custom",
@@ -656,7 +851,7 @@ func TestGetEnv(t *testing.T) {
 			shouldSetEnv: true,
 		},
 		{
-			name:         "环境变量不存在",
+			name:         "env not exists",
 			key:          "TEST_ENV_2",
 			defaultVal:   "default",
 			expectedVal:  "default",
@@ -685,7 +880,7 @@ func TestGetEnvBool(t *testing.T) {
 		shouldSetEnv bool
 	}{
 		{
-			name:         "有效的true值",
+			name:         "valid true",
 			key:          "TEST_BOOL_1",
 			defaultVal:   false,
 			envValue:     "true",
@@ -693,7 +888,7 @@ func TestGetEnvBool(t *testing.T) {
 			shouldSetEnv: true,
 		},
 		{
-			name:         "有效的false值",
+			name:         "valid false",
 			key:          "TEST_BOOL_2",
 			defaultVal:   true,
 			envValue:     "false",
@@ -701,7 +896,7 @@ func TestGetEnvBool(t *testing.T) {
 			shouldSetEnv: true,
 		},
 		{
-			name:         "无效的布尔值",
+			name:         "invalid bool",
 			key:          "TEST_BOOL_3",
 			defaultVal:   true,
 			envValue:     "invalid",
@@ -709,7 +904,7 @@ func TestGetEnvBool(t *testing.T) {
 			shouldSetEnv: true,
 		},
 		{
-			name:         "环境变量不存在",
+			name:         "env not exists",
 			key:          "TEST_BOOL_4",
 			defaultVal:   true,
 			expectedVal:  true,
@@ -724,6 +919,75 @@ func TestGetEnvBool(t *testing.T) {
 			}
 			result := getEnvBool(tt.key, tt.defaultVal)
 			assert.Equal(t, tt.expectedVal, result)
+		})
+	}
+}
+
+func TestNewLogger(t *testing.T) {
+	tests := []struct {
+		name      string
+		logFormat string
+		logLevel  string
+		wantErr   bool
+		checkFunc func(*logrus.Logger) bool
+	}{
+		{
+			name:      "default txt format and info level",
+			logFormat: "txt",
+			logLevel:  "info",
+			wantErr:   false,
+			checkFunc: func(l *logrus.Logger) bool {
+				_, isTxt := l.Formatter.(*logrus.TextFormatter)
+				return isTxt && l.Level == logrus.InfoLevel
+			},
+		},
+		{
+			name:      "json format and debug level",
+			logFormat: "json",
+			logLevel:  "debug",
+			wantErr:   false,
+			checkFunc: func(l *logrus.Logger) bool {
+				_, isJSON := l.Formatter.(*logrus.JSONFormatter)
+				return isJSON && l.Level == logrus.DebugLevel
+			},
+		},
+		{
+			name:      "unknown format default use txt format",
+			logFormat: "unknown",
+			logLevel:  "info",
+			wantErr:   false,
+			checkFunc: func(l *logrus.Logger) bool {
+				_, isTxt := l.Formatter.(*logrus.TextFormatter)
+				return isTxt && l.Level == logrus.InfoLevel
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			defer func() {
+				if r := recover(); r != nil {
+					if !tt.wantErr {
+						t.Errorf("unexpected panic: %v", r)
+					}
+				}
+			}()
+
+			logger := newLogger(tt.logFormat, tt.logLevel)
+
+			if tt.wantErr {
+				t.Error("newLogger() should return error")
+				return
+			}
+
+			if logger == nil {
+				t.Error("newLogger() returned nil")
+				return
+			}
+
+			if !tt.checkFunc(logger) {
+				t.Error("newLogger() config not match expected")
+			}
 		})
 	}
 }
