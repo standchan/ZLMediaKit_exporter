@@ -2,11 +2,9 @@ package main
 
 import (
 	"crypto/tls"
-	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -214,10 +212,6 @@ func NewExporter(uri string, secret string, logger *logrus.Logger, options Optio
 		options: options,
 	}
 
-	exporter.client.Transport = &http.Transport{
-		TLSClientConfig: exporter.CreateClientTLSConfig(),
-	}
-
 	return exporter, nil
 }
 
@@ -225,68 +219,6 @@ func newMetricDescr(namespace, subsystem, metricName, docString string, labels [
 	newDesc := prometheus.NewDesc(prometheus.BuildFQName(namespace, subsystem, metricName), docString, labels, nil)
 	metrics = append(metrics, newDesc)
 	return newDesc
-}
-
-func (e *Exporter) CreateClientTLSConfig() *tls.Config {
-	tlsConfig := tls.Config{
-		InsecureSkipVerify: e.options.SkipTLSVerification,
-	}
-
-	if e.options.ClientCertFile != "" && e.options.ClientKeyFile != "" {
-		cert, err := LoadKeyPair(e.options.ClientCertFile, e.options.ClientKeyFile)
-		if err != nil {
-			log.Fatal(err)
-		}
-		tlsConfig.Certificates = []tls.Certificate{*cert}
-	}
-
-	if e.options.CaCertFile != "" {
-		certificates, err := LoadCAFile(e.options.CaCertFile)
-		if err != nil {
-			log.Fatal(err)
-		}
-		tlsConfig.RootCAs = certificates
-	} else {
-		// Load the system certificate pool
-		rootCAs, err := x509.SystemCertPool()
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		tlsConfig.RootCAs = rootCAs
-	}
-
-	return &tlsConfig
-}
-
-func (e *Exporter) CreateServerTLSConfig(certFile, keyFile, caCertFile, minVersionString string) (*tls.Config, error) {
-	// Verify that the initial key pair is accepted
-	_, err := LoadKeyPair(certFile, keyFile)
-	if err != nil {
-		return nil, err
-	}
-
-	// Get minimum acceptable TLS version from the config string
-	minVersion, ok := tlsVersions[minVersionString]
-	if !ok {
-		return nil, fmt.Errorf("configured minimum TLS version unknown: '%s'", minVersionString)
-	}
-
-	tlsConfig := tls.Config{
-		MinVersion:     minVersion,
-		GetCertificate: GetServerCertificateFunc(certFile, keyFile),
-	}
-
-	if caCertFile != "" {
-		// Verify that the initial CA file is accepted when configured
-		_, err := LoadCAFile(caCertFile)
-		if err != nil {
-			return nil, err
-		}
-		tlsConfig.GetConfigForClient = GetConfigForClientFunc(certFile, keyFile, caCertFile)
-	}
-
-	return &tlsConfig, nil
 }
 
 func (e *Exporter) Describe(ch chan<- *prometheus.Desc) {
@@ -751,8 +683,6 @@ func main() {
 		log.Fatalln("tls client key file and cert file should both be present or both be empty")
 	}
 
-	exporter.CreateClientTLSConfig()
-
 	registry := prometheus.NewRegistry()
 	if !*zlmMetricsOnly {
 		registry = prometheus.DefaultRegisterer.(*prometheus.Registry)
@@ -763,15 +693,6 @@ func main() {
 	srv := &http.Server{}
 
 	go func() {
-		if *tlsServerCertFile != "" && *tlsServerKeyFile != "" {
-			log.Debugf("bind as TLS using cert %s and key %s", *tlsServerCertFile, *tlsServerKeyFile)
-
-			tlsConfig, err := exporter.CreateServerTLSConfig(*tlsServerCertFile, *tlsServerKeyFile, *tlsServerCaCertFile, *tlsServerMinVersion)
-			if err != nil {
-				log.Fatalln(err)
-			}
-			srv.TLSConfig = tlsConfig
-		}
 		if err := web.ListenAndServe(srv, webConfig, promlog.New(promlogConfig)); err != nil {
 			log.Fatalln("msg", "Error starting HTTP server", "err", err)
 		}
