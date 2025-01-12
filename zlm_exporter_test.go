@@ -374,10 +374,6 @@ func TestMetricsRegistration(t *testing.T) {
 	}
 }
 
-func tearDown() {
-	os.RemoveAll("testdata/tls")
-}
-
 func TestNewExporter(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -442,7 +438,7 @@ func TestExtractVersion(t *testing.T) {
 		},
 	}
 
-	server := setupTestServer(t, "index/api/version", mockResponse)
+	server := setupTestServer(t, ZlmAPIEndpointVersion, mockResponse)
 	defer server.Close()
 
 	logger := logrus.New()
@@ -478,7 +474,7 @@ func TestExtractAPIStatus(t *testing.T) {
 		},
 	}
 
-	server := setupTestServer(t, "index/api/getApiList", mockResponse)
+	server := setupTestServer(t, ZlmAPIEndpointGetApiList, mockResponse)
 	defer server.Close()
 
 	logger := logrus.New()
@@ -519,7 +515,7 @@ func TestExtractNetworkThreads(t *testing.T) {
 			},
 		},
 	}
-	server := setupTestServer(t, "index/api/getThreadsLoad", mockResponse)
+	server := setupTestServer(t, ZlmAPIEndpointGetNetworkThreads, mockResponse)
 	defer server.Close()
 
 	logger := logrus.New()
@@ -560,7 +556,7 @@ func TestExtractWorkThreads(t *testing.T) {
 			},
 		},
 	}
-	server := setupTestServer(t, "index/api/getWorkThreadsLoad", mockResponse)
+	server := setupTestServer(t, ZlmAPIEndpointGetWorkThreads, mockResponse)
 	defer server.Close()
 
 	logger := logrus.New()
@@ -609,7 +605,7 @@ func TestExtractStatistics(t *testing.T) {
 			UdpSession:            100,
 		},
 	}
-	server := setupTestServer(t, "index/api/getStatistic", mockResponse)
+	server := setupTestServer(t, ZlmAPIEndpointGetStatistics, mockResponse)
 	defer server.Close()
 
 	logger := logrus.New()
@@ -660,7 +656,7 @@ func TestExtractSession(t *testing.T) {
 			},
 		},
 	}
-	server := setupTestServer(t, "index/api/getAllSession", mockResponse)
+	server := setupTestServer(t, ZlmAPIEndpointGetAllSession, mockResponse)
 	defer server.Close()
 
 	logger := logrus.New()
@@ -719,7 +715,7 @@ func TestExtractStreamInfo(t *testing.T) {
 			},
 		},
 	}
-	server := setupTestServer(t, "index/api/getMediaList", mockResponse)
+	server := setupTestServer(t, ZlmAPIEndpointGetStream, mockResponse)
 	defer server.Close()
 
 	logger := logrus.New()
@@ -760,7 +756,7 @@ func TestExtractRtpServer(t *testing.T) {
 			},
 		},
 	}
-	server := setupTestServer(t, "index/api/listRtpServer", mockResponse)
+	server := setupTestServer(t, ZlmAPIEndpointListRtpServer, mockResponse)
 	defer server.Close()
 
 	logger := logrus.New()

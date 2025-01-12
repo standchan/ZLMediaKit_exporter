@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -29,16 +30,30 @@ import (
 
 // git log -1 --format=%cd --date=format:'%Y%m%d' | tr -d '\n'
 // todo: 考虑zlm版本更迭的api字段变动和废弃问题；可以用丢弃指标的方式来处理？
+
 const (
-	namespace               = "zlmediakit"
-	subsystemVersion        = "version"
-	subsystemApi            = "api"
-	subsystemNetworkThreads = "network_threads"
-	subsystemWorkThreads    = "work_threads"
-	subsystemStatistics     = "statistics"
-	subsystemSession        = "session"
-	subsystemStream         = "stream"
-	subsystemRtp            = "rtp"
+	ZlmAPISuccessCode = 0
+
+	ZlmAPIEndpointVersion           = "index/api/version"
+	ZlmAPIEndpointGetApiList        = "index/api/getApiList"
+	ZlmAPIEndpointGetNetworkThreads = "index/api/getThreadsLoad"
+	ZlmAPIEndpointGetWorkThreads    = "index/api/getWorkThreadsLoad"
+	ZlmAPIEndpointGetStatistics     = "index/api/getStatistic"
+	ZlmAPIEndpointGetAllSession     = "index/api/getAllSession"
+	ZlmAPIEndpointGetStream         = "index/api/getMediaList"
+	ZlmAPIEndpointListRtpServer     = "index/api/listRtpServer"
+)
+
+const (
+	Namespace               = "zlmediakit"
+	SubsystemVersion        = "version"
+	SubsystemApi            = "api"
+	SubsystemNetworkThreads = "network_threads"
+	SubsystemWorkThreads    = "work_threads"
+	SubsystemStatistics     = "statistics"
+	SubsystemSession        = "session"
+	SubsystemStream         = "stream"
+	SubsystemRtp            = "rtp"
 )
 
 func getEnv(key string, defaultVal string) string {
@@ -72,7 +87,7 @@ var metrics []*prometheus.Desc
 var (
 	scrapeErrors = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Namespace: namespace,
+			Namespace: Namespace,
 			Name:      "scrape_errors_total",
 			Help:      "Number of errors while scraping ZLMediaKit.",
 		},
@@ -81,52 +96,52 @@ var (
 )
 
 var (
-	ZLMediaKitInfo = newMetricDescr(namespace, subsystemVersion, "info", "ZLMediaKit version info.", []string{"branchName", "buildTime", "commitHash"})
-	ApiStatus      = newMetricDescr(namespace, subsystemApi, "status", "The status of API endpoint", []string{"endpoint"})
+	ZLMediaKitInfo = newMetricDescr(Namespace, SubsystemVersion, "info", "ZLMediaKit version info.", []string{"branchName", "buildTime", "commitHash"})
+	ApiStatus      = newMetricDescr(Namespace, SubsystemApi, "status", "The status of API endpoint", []string{"endpoint"})
 
 	// network threads metric
-	NetworkThreadsTotal      = newMetricDescr(namespace, subsystemNetworkThreads, "total", "Total number of network threads", []string{})
-	NetworkThreadsLoadTotal  = newMetricDescr(namespace, subsystemNetworkThreads, "load_total", "Total of network threads load", []string{})
-	NetworkThreadsDelayTotal = newMetricDescr(namespace, subsystemNetworkThreads, "delay_total", "Total of network threads delay", []string{})
+	NetworkThreadsTotal      = newMetricDescr(Namespace, SubsystemNetworkThreads, "total", "Total number of network threads", []string{})
+	NetworkThreadsLoadTotal  = newMetricDescr(Namespace, SubsystemNetworkThreads, "load_total", "Total of network threads load", []string{})
+	NetworkThreadsDelayTotal = newMetricDescr(Namespace, SubsystemNetworkThreads, "delay_total", "Total of network threads delay", []string{})
 
 	// work threads metrics
-	WorkThreadsTotal      = newMetricDescr(namespace, subsystemWorkThreads, "total", "Total number of work threads", []string{})
-	WorkThreadsLoadTotal  = newMetricDescr(namespace, subsystemWorkThreads, "load_total", "Total of work threads load", []string{})
-	WorkThreadsDelayTotal = newMetricDescr(namespace, subsystemWorkThreads, "delay_total", "Total of work threads delay", []string{})
+	WorkThreadsTotal      = newMetricDescr(Namespace, SubsystemWorkThreads, "total", "Total number of work threads", []string{})
+	WorkThreadsLoadTotal  = newMetricDescr(Namespace, SubsystemWorkThreads, "load_total", "Total of work threads load", []string{})
+	WorkThreadsDelayTotal = newMetricDescr(Namespace, SubsystemWorkThreads, "delay_total", "Total of work threads delay", []string{})
 
 	// statistics metrics
-	StatisticsBuffer                = newMetricDescr(namespace, subsystemStatistics, "buffer", "Statistics buffer", []string{})
-	StatisticsBufferLikeString      = newMetricDescr(namespace, subsystemStatistics, "buffer_like_string", "Statistics BufferLikeString", []string{})
-	StatisticsBufferList            = newMetricDescr(namespace, subsystemStatistics, "buffer_list", "Statistics BufferList", []string{})
-	StatisticsBufferRaw             = newMetricDescr(namespace, subsystemStatistics, "buffer_raw", "Statistics BufferRaw", []string{})
-	StatisticsFrame                 = newMetricDescr(namespace, subsystemStatistics, "frame", "Statistics Frame", []string{})
-	StatisticsFrameImp              = newMetricDescr(namespace, subsystemStatistics, "frame_imp", "Statistics FrameImp", []string{})
-	StatisticsMediaSource           = newMetricDescr(namespace, subsystemStatistics, "media_source", "Statistics MediaSource", []string{})
-	StatisticsMultiMediaSourceMuxer = newMetricDescr(namespace, subsystemStatistics, "multi_media_source_muxer", "Statistics MultiMediaSourceMuxer", []string{})
-	StatisticsRtmpPacket            = newMetricDescr(namespace, subsystemStatistics, "rtmp_packet", "Statistics RtmpPacket", []string{})
-	StatisticsRtpPacket             = newMetricDescr(namespace, subsystemStatistics, "rtp_packet", "Statistics RtpPacket", []string{})
-	StatisticsSocket                = newMetricDescr(namespace, subsystemStatistics, "socket", "Statistics Socket", []string{})
-	StatisticsTcpClient             = newMetricDescr(namespace, subsystemStatistics, "tcp_client", "Statistics TcpClient", []string{})
-	StatisticsTcpServer             = newMetricDescr(namespace, subsystemStatistics, "tcp_server", "Statistics TcpServer", []string{})
-	StatisticsTcpSession            = newMetricDescr(namespace, subsystemStatistics, "tcp_session", "Statistics TcpSession", []string{})
-	StatisticsUdpServer             = newMetricDescr(namespace, subsystemStatistics, "udp_server", "Statistics UdpServer", []string{})
-	StatisticsUdpSession            = newMetricDescr(namespace, subsystemStatistics, "udp_session", "Statistics UdpSession", []string{})
+	StatisticsBuffer                = newMetricDescr(Namespace, SubsystemStatistics, "buffer", "Statistics buffer", []string{})
+	StatisticsBufferLikeString      = newMetricDescr(Namespace, SubsystemStatistics, "buffer_like_string", "Statistics BufferLikeString", []string{})
+	StatisticsBufferList            = newMetricDescr(Namespace, SubsystemStatistics, "buffer_list", "Statistics BufferList", []string{})
+	StatisticsBufferRaw             = newMetricDescr(Namespace, SubsystemStatistics, "buffer_raw", "Statistics BufferRaw", []string{})
+	StatisticsFrame                 = newMetricDescr(Namespace, SubsystemStatistics, "frame", "Statistics Frame", []string{})
+	StatisticsFrameImp              = newMetricDescr(Namespace, SubsystemStatistics, "frame_imp", "Statistics FrameImp", []string{})
+	StatisticsMediaSource           = newMetricDescr(Namespace, SubsystemStatistics, "media_source", "Statistics MediaSource", []string{})
+	StatisticsMultiMediaSourceMuxer = newMetricDescr(Namespace, SubsystemStatistics, "multi_media_source_muxer", "Statistics MultiMediaSourceMuxer", []string{})
+	StatisticsRtmpPacket            = newMetricDescr(Namespace, SubsystemStatistics, "rtmp_packet", "Statistics RtmpPacket", []string{})
+	StatisticsRtpPacket             = newMetricDescr(Namespace, SubsystemStatistics, "rtp_packet", "Statistics RtpPacket", []string{})
+	StatisticsSocket                = newMetricDescr(Namespace, SubsystemStatistics, "socket", "Statistics Socket", []string{})
+	StatisticsTcpClient             = newMetricDescr(Namespace, SubsystemStatistics, "tcp_client", "Statistics TcpClient", []string{})
+	StatisticsTcpServer             = newMetricDescr(Namespace, SubsystemStatistics, "tcp_server", "Statistics TcpServer", []string{})
+	StatisticsTcpSession            = newMetricDescr(Namespace, SubsystemStatistics, "tcp_session", "Statistics TcpSession", []string{})
+	StatisticsUdpServer             = newMetricDescr(Namespace, SubsystemStatistics, "udp_server", "Statistics UdpServer", []string{})
+	StatisticsUdpSession            = newMetricDescr(Namespace, SubsystemStatistics, "udp_session", "Statistics UdpSession", []string{})
 
 	// session metrics
-	SessionInfo  = newMetricDescr(namespace, subsystemSession, "info", "Session info", []string{"id", "identifier", "local_ip", "local_port", "peer_ip", "peer_port", "typeid"})
-	SessionTotal = newMetricDescr(namespace, subsystemSession, "total", "Total number of sessions", []string{})
+	SessionInfo  = newMetricDescr(Namespace, SubsystemSession, "info", "Session info", []string{"id", "identifier", "local_ip", "local_port", "peer_ip", "peer_port", "typeid"})
+	SessionTotal = newMetricDescr(Namespace, SubsystemSession, "total", "Total number of sessions", []string{})
 
 	// stream metrics
-	StreamsInfo            = newMetricDescr(namespace, subsystemStream, "info", "Stream basic information", []string{"vhost", "app", "stream", "schema", "origin_type", "origin_url"})
-	StreamStatus           = newMetricDescr(namespace, subsystemStream, "status", "Stream status (1: active with data flowing, 0: inactive)", []string{"vhost", "app", "stream", "schema"})
-	StreamReaderCount      = newMetricDescr(namespace, subsystemStream, "reader_count", "Stream reader count", []string{"vhost", "app", "stream", "schema"})
-	StreamTotalReaderCount = newMetricDescr(namespace, subsystemStream, "total_reader_count", "Total reader count across all schemas", []string{"vhost", "app", "stream"})
-	StreamBandwidths       = newMetricDescr(namespace, subsystemStream, "bandwidths", "Stream bandwidth", []string{"vhost", "app", "stream", "schema", "originType"})
-	StreamTotal            = newMetricDescr(namespace, subsystemStream, "total", "Total number of streams", []string{})
+	StreamsInfo            = newMetricDescr(Namespace, SubsystemStream, "info", "Stream basic information", []string{"vhost", "app", "stream", "schema", "origin_type", "origin_url"})
+	StreamStatus           = newMetricDescr(Namespace, SubsystemStream, "status", "Stream status (1: active with data flowing, 0: inactive)", []string{"vhost", "app", "stream", "schema"})
+	StreamReaderCount      = newMetricDescr(Namespace, SubsystemStream, "reader_count", "Stream reader count", []string{"vhost", "app", "stream", "schema"})
+	StreamTotalReaderCount = newMetricDescr(Namespace, SubsystemStream, "total_reader_count", "Total reader count across all schemas", []string{"vhost", "app", "stream"})
+	StreamBandwidths       = newMetricDescr(Namespace, SubsystemStream, "bandwidths", "Stream bandwidth", []string{"vhost", "app", "stream", "schema", "originType"})
+	StreamTotal            = newMetricDescr(Namespace, SubsystemStream, "total", "Total number of streams", []string{})
 
 	// rtp metrics
-	RtpServerInfo  = newMetricDescr(namespace, subsystemRtp, "server_info", "RTP server info", []string{"port", "stream_id"})
-	RtpServerTotal = newMetricDescr(namespace, subsystemRtp, "server_total", "Total number of RTP servers", []string{})
+	RtpServerInfo  = newMetricDescr(Namespace, SubsystemRtp, "server_info", "RTP server info", []string{"port", "stream_id"})
+	RtpServerTotal = newMetricDescr(Namespace, SubsystemRtp, "server_total", "Total number of RTP servers", []string{})
 )
 
 type Exporter struct {
@@ -145,6 +160,8 @@ type Exporter struct {
 }
 
 type Options struct {
+	SSLVerify bool
+	Timeout   time.Duration
 }
 
 type BuildInfo struct {
@@ -167,19 +184,19 @@ func NewExporter(uri string, secret string, logger *logrus.Logger, options Optio
 		scrapeSecret: secret,
 
 		up: prometheus.NewGauge(prometheus.GaugeOpts{
-			Namespace: namespace,
+			Namespace: Namespace,
 			Name:      "up",
 			Help:      "Was the last scrape of ZLMediaKit successful.",
 		}),
 
 		totalScrapes: prometheus.NewCounter(prometheus.CounterOpts{
-			Namespace: namespace,
+			Namespace: Namespace,
 			Name:      "exporter_scrapes_total",
 			Help:      "Current total ZLMediaKit scrapes.",
 		}),
 
 		totalScrapeErrors: *prometheus.NewCounterVec(prometheus.CounterOpts{
-			Namespace: namespace,
+			Namespace: Namespace,
 			Name:      "scrape_errors_total",
 			Help:      "Number of errors while scraping ZLMediaKit.",
 		}, []string{"endpoint"}),
@@ -276,6 +293,16 @@ func (e *Exporter) fetchHTTP(ch chan<- prometheus.Metric, endpoint string, proce
 		},
 	}
 
+	if e.options.Timeout != 0 {
+		e.client.Timeout = e.options.Timeout
+	}
+
+	if e.options.SSLVerify {
+		e.client.Transport = &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		}
+	}
+
 	res, err := e.client.Do(req)
 	if err != nil {
 		scrapeErrors.WithLabelValues(endpoint).Inc()
@@ -309,7 +336,7 @@ func (e *Exporter) extractVersion(ch chan<- prometheus.Metric) {
 		ch <- prometheus.MustNewConstMetric(ZLMediaKitInfo, prometheus.GaugeValue, 1, data.BranchName, data.BuildTime, data.CommitHash)
 		return nil
 	}
-	e.fetchHTTP(ch, "index/api/version", processFunc)
+	e.fetchHTTP(ch, ZlmAPIEndpointVersion, processFunc)
 }
 
 func (e *Exporter) extractAPIStatus(ch chan<- prometheus.Metric) {
@@ -319,7 +346,7 @@ func (e *Exporter) extractAPIStatus(ch chan<- prometheus.Metric) {
 		if err := json.NewDecoder(body).Decode(&apiResponse); err != nil {
 			return fmt.Errorf("error decoding JSON response: %w", err)
 		}
-		if apiResponse.Code != 0 {
+		if apiResponse.Code != ZlmAPISuccessCode {
 			return fmt.Errorf("unexpected API response code: %d,reason: %s", apiResponse.Code, apiResponse.Msg)
 		}
 
@@ -330,7 +357,7 @@ func (e *Exporter) extractAPIStatus(ch chan<- prometheus.Metric) {
 		}
 		return nil
 	}
-	e.fetchHTTP(ch, "index/api/getApiList", processFunc)
+	e.fetchHTTP(ch, ZlmAPIEndpointGetApiList, processFunc)
 }
 
 type APINetworkThreadsObject struct {
@@ -346,7 +373,7 @@ func (e *Exporter) extractNetworkThreads(ch chan<- prometheus.Metric) {
 		if err := json.NewDecoder(body).Decode(&apiResponse); err != nil {
 			return fmt.Errorf("error decoding JSON response: %w", err)
 		}
-		if apiResponse.Code != 0 {
+		if apiResponse.Code != ZlmAPISuccessCode {
 			return fmt.Errorf("unexpected API response code: %d,reason: %s", apiResponse.Code, apiResponse.Msg)
 		}
 
@@ -361,7 +388,7 @@ func (e *Exporter) extractNetworkThreads(ch chan<- prometheus.Metric) {
 		ch <- prometheus.MustNewConstMetric(NetworkThreadsDelayTotal, prometheus.GaugeValue, delayTotal)
 		return nil
 	}
-	e.fetchHTTP(ch, "index/api/getThreadsLoad", processFunc)
+	e.fetchHTTP(ch, ZlmAPIEndpointGetNetworkThreads, processFunc)
 }
 
 type APIWorkThreadsObject struct {
@@ -377,7 +404,7 @@ func (e *Exporter) extractWorkThreads(ch chan<- prometheus.Metric) {
 		if err := json.NewDecoder(body).Decode(&apiResponse); err != nil {
 			return fmt.Errorf("error decoding JSON response: %w", err)
 		}
-		if apiResponse.Code != 0 {
+		if apiResponse.Code != ZlmAPISuccessCode {
 			return fmt.Errorf("unexpected API response code: %d,reason: %s", apiResponse.Code, apiResponse.Msg)
 		}
 		var loadTotal, delayTotal, total float64
@@ -391,7 +418,7 @@ func (e *Exporter) extractWorkThreads(ch chan<- prometheus.Metric) {
 		ch <- prometheus.MustNewConstMetric(WorkThreadsDelayTotal, prometheus.GaugeValue, delayTotal)
 		return nil
 	}
-	e.fetchHTTP(ch, "index/api/getWorkThreadsLoad", processFunc)
+	e.fetchHTTP(ch, ZlmAPIEndpointGetWorkThreads, processFunc)
 }
 
 type APIStatisticsObject struct {
@@ -419,7 +446,7 @@ func (e *Exporter) extractStatistics(ch chan<- prometheus.Metric) {
 		if err := json.NewDecoder(body).Decode(&apiResponse); err != nil {
 			return fmt.Errorf("error decoding JSON response: %w", err)
 		}
-		if apiResponse.Code != 0 {
+		if apiResponse.Code != ZlmAPISuccessCode {
 			return fmt.Errorf("unexpected API response code: %d,reason: %s", apiResponse.Code, apiResponse.Msg)
 		}
 		data := apiResponse.Data
@@ -441,7 +468,7 @@ func (e *Exporter) extractStatistics(ch chan<- prometheus.Metric) {
 		ch <- e.mustNewConstMetric(StatisticsUdpSession, prometheus.GaugeValue, data.UdpSession)
 		return nil
 	}
-	e.fetchHTTP(ch, "index/api/getStatistic", processFunc)
+	e.fetchHTTP(ch, ZlmAPIEndpointGetStatistics, processFunc)
 }
 
 type APISessionObject struct {
@@ -462,7 +489,7 @@ func (e *Exporter) extractSession(ch chan<- prometheus.Metric) {
 		if err := json.NewDecoder(body).Decode(&apiResponse); err != nil {
 			return fmt.Errorf("error decoding JSON response: %w", err)
 		}
-		if apiResponse.Code != 0 {
+		if apiResponse.Code != ZlmAPISuccessCode {
 			return fmt.Errorf("unexpected API response code: %d,reason: %s", apiResponse.Code, apiResponse.Msg)
 		}
 		for _, v := range apiResponse.Data {
@@ -478,7 +505,7 @@ func (e *Exporter) extractSession(ch chan<- prometheus.Metric) {
 		ch <- prometheus.MustNewConstMetric(SessionTotal, prometheus.GaugeValue, float64(len(apiResponse.Data)))
 		return nil
 	}
-	e.fetchHTTP(ch, "index/api/getAllSession", processFunc)
+	e.fetchHTTP(ch, ZlmAPIEndpointGetAllSession, processFunc)
 }
 
 type APIStreamInfoObject struct {
@@ -505,6 +532,10 @@ func (e *Exporter) extractStream(ch chan<- prometheus.Metric) {
 		var apiResponse ZLMAPIResponse[APIStreamInfoObjects]
 		if err := json.NewDecoder(body).Decode(&apiResponse); err != nil {
 			return fmt.Errorf("error decoding JSON response: %w", err)
+		}
+
+		if apiResponse.Code != ZlmAPISuccessCode {
+			return fmt.Errorf("unexpected API response code: %d,reason: %s", apiResponse.Code, apiResponse.Msg)
 		}
 
 		processedStreams := make(map[string]bool)
@@ -549,7 +580,7 @@ func (e *Exporter) extractStream(ch chan<- prometheus.Metric) {
 
 		return nil
 	}
-	e.fetchHTTP(ch, "index/api/getMediaList", processFunc)
+	e.fetchHTTP(ch, ZlmAPIEndpointGetStream, processFunc)
 }
 
 type APIRtpServerObject struct {
@@ -565,7 +596,7 @@ func (e *Exporter) extractRtp(ch chan<- prometheus.Metric) {
 		if err := json.NewDecoder(body).Decode(&apiResponse); err != nil {
 			return fmt.Errorf("error decoding JSON response: %w", err)
 		}
-		if apiResponse.Code != 0 {
+		if apiResponse.Code != ZlmAPISuccessCode {
 			return fmt.Errorf("unexpected API response code: %d,reason: %s", apiResponse.Code, apiResponse.Msg)
 		}
 		for _, v := range apiResponse.Data {
@@ -576,7 +607,7 @@ func (e *Exporter) extractRtp(ch chan<- prometheus.Metric) {
 		ch <- prometheus.MustNewConstMetric(RtpServerTotal, prometheus.GaugeValue, float64(len(apiResponse.Data)))
 		return nil
 	}
-	e.fetchHTTP(ch, "index/api/listRtpServer", processFunc)
+	e.fetchHTTP(ch, ZlmAPIEndpointListRtpServer, processFunc)
 }
 
 func newLogger(logFormat, logLevel string) *logrus.Logger {
@@ -608,6 +639,9 @@ var (
 	zlmSecret      = kingpin.Flag("secret", "Secret for the scrape URI").Default(getEnv("ZLM_EXPORTER_SECRET", "")).String()
 	zlmMetricsOnly = kingpin.Flag("metrics-only", "Only export metrics, not other key-value metrics").Default(getEnv("ZLM_EXPORTER_METRICS_ONLY", "true")).Bool()
 
+	timeout   = kingpin.Flag("timeout", "Timeout for the scrape URI").Default(getEnv("ZLM_EXPORTER_TIMEOUT", "10s")).Duration()
+	sslVerify = kingpin.Flag("ssl-verify", "SSL verify").Default(getEnv("ZLM_EXPORTER_SSL_VERIFY", "false")).Bool()
+
 	logFormat = kingpin.Flag("log-format", "Log format, valid options are txt and json").Default(getEnv("ZLM_EXPORTER_LOG_FORMAT", "txt")).String()
 	logLevel  = kingpin.Flag("log-level", "Log level, valid options are debug, info, warn, error, fatal, panic").Default(getEnv("ZLM_EXPORTER_LOG_LEVEL", "info")).String()
 )
@@ -615,8 +649,6 @@ var (
 // doc: https://prometheus.io/docs/instrumenting/writing_exporters/
 // todo 加入--disable-exporting-key-values
 func main() {
-
-	// todo 配置校验？
 
 	promlogConfig := &promlog.Config{}
 	flag.AddFlags(kingpin.CommandLine, promlogConfig)
@@ -633,7 +665,10 @@ func main() {
 		runtime.GOARCH,
 	)
 
-	option := Options{}
+	option := Options{
+		Timeout:   *timeout,
+		SSLVerify: *sslVerify,
+	}
 
 	exporter, err := NewExporter(*zlmScrapeURI, *zlmSecret, log, option)
 	if err != nil {
