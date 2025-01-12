@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"os/exec"
 	"testing"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -38,7 +37,6 @@ var (
 )
 
 func setup() {
-	setupTLSTestFile()
 	setupZlmApiServer()
 }
 
@@ -83,15 +81,6 @@ func setupZlmApiServer() {
 	go func() {
 		r.Run(MockZlmServerAddr)
 	}()
-}
-
-func setupTLSTestFile() {
-	scriptPath := "scripts/generate-test-certs.sh"
-	cmd := exec.Command("/bin/bash", scriptPath)
-	err := cmd.Run()
-	if err != nil {
-		log.Fatal(err)
-	}
 }
 
 func readTestData(name string) map[string]any {
