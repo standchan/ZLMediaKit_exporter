@@ -1,7 +1,6 @@
 package main
 
 import (
-	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -152,13 +151,6 @@ type BuildInfo struct {
 	Version   string
 	CommitSha string
 	Date      string
-}
-
-var tlsVersions = map[string]uint16{
-	"TLS1.3": tls.VersionTLS13,
-	"TLS1.2": tls.VersionTLS12,
-	"TLS1.1": tls.VersionTLS11,
-	"TLS1.0": tls.VersionTLS10,
 }
 
 func NewExporter(uri string, secret string, logger *logrus.Logger, options Options) (*Exporter, error) {
