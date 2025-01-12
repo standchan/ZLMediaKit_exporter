@@ -14,4 +14,4 @@ COPY --from=builder /app/zlm_exporter .
 
 EXPOSE 9101
 
-ENTRYPOINT ["/app/zlm_exporter"]
+ENTRYPOINT ["/zlm_exporter"]
