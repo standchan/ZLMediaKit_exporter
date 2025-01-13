@@ -21,7 +21,7 @@ import (
 )
 
 // most of unittest powered by cursor
-// it still has some issues
+// WIP
 var (
 	MockZlmServerPort    = "9999"
 	MockZlmServerAddr    = fmt.Sprintf("localhost:%s", MockZlmServerPort)
@@ -247,10 +247,8 @@ func TestFetchHTTPErrorHandling(t *testing.T) {
 				return nil
 			}
 
-			// 执行请求
 			exporter.fetchHTTP(ch, endpoint, processFunc)
 
-			// 验证错误计数
 			errorCount := testutil.ToFloat64(scrapeErrors.WithLabelValues(endpoint))
 			if tt.expectedError {
 				assert.Greater(t, errorCount, float64(0), "expected error but not recorded")
