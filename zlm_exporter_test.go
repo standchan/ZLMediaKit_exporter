@@ -76,7 +76,10 @@ func setupZlmApiServer() {
 	})
 
 	go func() {
-		r.Run(MockZlmServerAddr)
+		err := r.Run(MockZlmServerAddr)
+		if err != nil {
+			log.Fatal(err)
+		}
 	}()
 }
 
@@ -86,7 +89,10 @@ func readTestData(name string) map[string]any {
 		log.Fatal(err)
 	}
 	var fileJson map[string]any
-	json.Unmarshal(file, &fileJson)
+	err = json.Unmarshal(file, &fileJson)
+	if err != nil {
+		log.Println(err)
+	}
 	return fileJson
 }
 
@@ -227,7 +233,7 @@ func TestFetchHTTPErrorHandling(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(tt.responseCode)
-				w.Write([]byte(tt.responseBody))
+				_, _ = w.Write([]byte(tt.responseBody))
 			}))
 			defer server.Close()
 
@@ -263,7 +269,7 @@ func TestFetchHTTPConcurrency(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(100 * time.Millisecond)
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"code": 0, "msg": "success", "data": {}}`))
+		_, _ = w.Write([]byte(`{"code": 0, "msg": "success", "data": {}}`))
 	}))
 	defer server.Close()
 
@@ -421,7 +427,7 @@ func setupTestServer(t *testing.T, endpoint string, response interface{}) *httpt
 		assert.Equal(t, "test-secret", r.Header.Get("secret"))
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 }
 
