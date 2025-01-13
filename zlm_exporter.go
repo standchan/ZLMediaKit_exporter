@@ -28,9 +28,6 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// git log -1 --format=%cd --date=format:'%Y%m%d' | tr -d '\n'
-// todo: 考虑zlm版本更迭的api字段变动和废弃问题；可以用丢弃指标的方式来处理？
-
 const (
 	ZlmAPISuccessCode = 0
 
@@ -647,7 +644,7 @@ var (
 )
 
 // doc: https://prometheus.io/docs/instrumenting/writing_exporters/
-// todo 加入--disable-exporting-key-values
+// todo: --disable-exporting-key-values
 func main() {
 
 	promlogConfig := &promlog.Config{}
