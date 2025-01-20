@@ -96,6 +96,10 @@ func readTestData(name string) map[string]any {
 	return fileJson
 }
 
+func teardown() {
+	scrapeErrors.Reset()
+}
+
 func TestMetricsDescribe(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -161,6 +165,7 @@ func TestMetricsDescribe(t *testing.T) {
 			for _, km := range keyMetrics {
 				assert.True(t, descMap[km.desc.String()], "missing key metric description: %s", km.name)
 			}
+			teardown()
 		})
 	}
 }
@@ -204,6 +209,7 @@ func TestMetricsCollect(t *testing.T) {
 			}
 
 			assert.Equal(t, tt.metricsCount, len(metrics), "metrics count not match")
+			teardown()
 		})
 	}
 }
@@ -238,7 +244,10 @@ func TestFetchHTTPErrorHandling(t *testing.T) {
 			defer server.Close()
 
 			logger := logrus.New()
-			options := Options{}
+			options := Options{
+				Timeout:   1 * time.Second,
+				SSLVerify: true,
+			}
 			exporter, err := NewExporter(server.URL, MockZlmServerSecret, logger, options)
 			assert.NoError(t, err)
 
@@ -262,6 +271,7 @@ func TestFetchHTTPErrorHandling(t *testing.T) {
 				assert.Equal(t, float64(0), errorCount, "unexpected error recorded")
 			}
 		})
+		teardown()
 	}
 }
 
@@ -293,8 +303,8 @@ func TestFetchHTTPConcurrency(t *testing.T) {
 			exporter.fetchHTTP(ch, endpoint, processFunc)
 		}(i)
 	}
-
 	wg.Wait()
+	teardown()
 }
 
 func TestMetricsRegistration(t *testing.T) {
@@ -419,6 +429,7 @@ func TestNewExporter(t *testing.T) {
 				assert.NotNil(t, exporter)
 			}
 		})
+		teardown()
 	}
 }
 
@@ -431,159 +442,310 @@ func setupTestServer(t *testing.T, endpoint string, response interface{}) *httpt
 	}))
 }
 
-func TestExtractVersion(t *testing.T) {
-	mockResponse := ZLMAPIResponse[APIVersionObject]{
-		Code: 0,
-		Msg:  "success",
-		Data: APIVersionObject{
-			BranchName: "master",
-			BuildTime:  "20220101",
-			CommitHash: "abc123",
-		},
-	}
-
-	server := setupTestServer(t, ZlmAPIEndpointVersion, mockResponse)
-	defer server.Close()
-
+func setupExporter(t *testing.T, server *httptest.Server) *Exporter {
 	logger := logrus.New()
 	options := Options{}
 	exporter, err := NewExporter(server.URL, MockZlmServerSecret, logger, options)
 	assert.NoError(t, err)
+	return exporter
+}
 
-	ch := make(chan prometheus.Metric, 1)
-	done := make(chan bool)
-
-	go func() {
-		exporter.extractVersion(ch)
-		close(ch)
-		done <- true
-	}()
-
-	metrics := make([]prometheus.Metric, 0)
-	for metric := range ch {
-		metrics = append(metrics, metric)
+func TestExtractVersion(t *testing.T) {
+	tests := []struct {
+		name                      string
+		mockResponse              map[string]interface{}
+		expectedMetricsCount      int
+		expectedScrapeErrorsCount float64
+	}{
+		{
+			name: "success",
+			mockResponse: map[string]interface{}{
+				"code": 0,
+				"msg":  "success",
+				"data": map[string]interface{}{
+					"branchName": "master",
+					"buildTime":  "20220101",
+					"commitHash": "abc123",
+				},
+			},
+			expectedMetricsCount:      1,
+			expectedScrapeErrorsCount: 0,
+		},
+		{
+			name: "error-code-not-0",
+			mockResponse: map[string]interface{}{
+				"code": 1,
+				"msg":  "error",
+			},
+			expectedMetricsCount:      0,
+			expectedScrapeErrorsCount: 1,
+		},
+		{
+			name: "error-decode-json",
+			mockResponse: map[string]interface{}{
+				"code": 0,
+				"msg":  "success",
+				"data": map[string]interface{}{
+					"branchName": "master",
+					"buildTime":  20220101,
+					"commitHash": "abc123",
+				},
+			},
+			expectedMetricsCount:      0,
+			expectedScrapeErrorsCount: 1,
+		},
 	}
-	<-done
 
-	assert.Equal(t, 1, len(metrics))
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := setupTestServer(t, ZlmAPIEndpointVersion, tt.mockResponse)
+			defer server.Close()
+
+			exporter := setupExporter(t, server)
+
+			ch := make(chan prometheus.Metric, tt.expectedMetricsCount)
+			done := make(chan bool)
+
+			go func() {
+				exporter.extractVersion(ch)
+				close(ch)
+				done <- true
+			}()
+
+			metrics := make([]prometheus.Metric, 0)
+			for metric := range ch {
+				metrics = append(metrics, metric)
+			}
+			<-done
+			assert.Equal(t, tt.expectedScrapeErrorsCount, testutil.ToFloat64(scrapeErrors.WithLabelValues(ZlmAPIEndpointVersion)))
+			assert.Equal(t, tt.expectedMetricsCount, len(metrics))
+			teardown()
+		})
+	}
 }
 
 func TestExtractAPIStatus(t *testing.T) {
-	mockResponse := ZLMAPIResponse[[]string]{
-		Code: 0,
-		Msg:  "success",
-		Data: []string{
-			"index/api/version",
-			"index/api/getApiList",
+	tests := []struct {
+		name                      string
+		mockResponse              map[string]interface{}
+		expectedMetricsCount      int
+		expectedScrapeErrorsCount float64
+	}{
+		{
+			name: "success",
+			mockResponse: map[string]interface{}{
+				"code": 0,
+				"msg":  "success",
+				"data": []string{
+					"index/api/version",
+					"index/api/getApiList",
+				},
+			},
+			expectedMetricsCount:      2,
+			expectedScrapeErrorsCount: 0,
+		},
+		{
+			name: "error-code-not-0",
+			mockResponse: map[string]interface{}{
+				"code": 1,
+				"msg":  "error",
+			},
+			expectedMetricsCount:      0,
+			expectedScrapeErrorsCount: 1,
+		},
+		{
+			name: "error-invalid-data-type",
+			mockResponse: map[string]interface{}{
+				"code": 0,
+				"msg":  "success",
+				"data": map[string]interface{}{
+					"invalid": "data",
+				},
+			},
+			expectedMetricsCount:      0,
+			expectedScrapeErrorsCount: 1,
 		},
 	}
 
-	server := setupTestServer(t, ZlmAPIEndpointGetApiList, mockResponse)
-	defer server.Close()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := setupTestServer(t, ZlmAPIEndpointGetApiList, tt.mockResponse)
+			defer server.Close()
 
-	logger := logrus.New()
-	options := Options{}
-	exporter, err := NewExporter(server.URL, MockZlmServerSecret, logger, options)
-	assert.NoError(t, err)
+			exporter := setupExporter(t, server)
 
-	ch := make(chan prometheus.Metric, 2)
-	done := make(chan bool)
+			ch := make(chan prometheus.Metric, tt.expectedMetricsCount)
+			done := make(chan bool)
 
-	go func() {
-		exporter.extractAPIStatus(ch)
-		close(ch)
-		done <- true
-	}()
+			go func() {
+				exporter.extractAPIStatus(ch)
+				close(ch)
+				done <- true
+			}()
 
-	metrics := make([]prometheus.Metric, 0)
-	for metric := range ch {
-		metrics = append(metrics, metric)
+			metrics := make([]prometheus.Metric, 0)
+			for metric := range ch {
+				metrics = append(metrics, metric)
+			}
+			<-done
+
+			assert.Equal(t, tt.expectedScrapeErrorsCount, testutil.ToFloat64(scrapeErrors.WithLabelValues(ZlmAPIEndpointGetApiList)))
+			assert.Equal(t, tt.expectedMetricsCount, len(metrics))
+			teardown()
+		})
 	}
-	<-done
-
-	assert.Equal(t, 2, len(metrics))
 }
 
 func TestExtractNetworkThreads(t *testing.T) {
-	mockResponse := ZLMAPIResponse[APINetworkThreadsObjects]{
-		Code: 0,
-		Msg:  "success",
-		Data: APINetworkThreadsObjects{
-			APINetworkThreadsObject{
-				Load:  100,
-				Delay: 100,
+	tests := []struct {
+		name                      string
+		mockResponse              map[string]interface{}
+		expectedMetricsCount      int
+		expectedScrapeErrorsCount float64
+	}{
+		{
+			name: "success",
+			mockResponse: map[string]interface{}{
+				"code": 0,
+				"msg":  "success",
+				"data": []map[string]interface{}{
+					{
+						"load":  100,
+						"delay": 100,
+					},
+					{
+						"load":  200,
+						"delay": 200,
+					},
+				},
 			},
-			APINetworkThreadsObject{
-				Load:  200,
-				Delay: 200,
+			expectedMetricsCount:      3, // NetworkThreadsTotal + 2个线程的负载数据
+			expectedScrapeErrorsCount: 0,
+		},
+		{
+			name: "error-code-not-0",
+			mockResponse: map[string]interface{}{
+				"code": 1,
+				"msg":  "error",
 			},
+			expectedMetricsCount:      0,
+			expectedScrapeErrorsCount: 1,
+		},
+		{
+			name: "error-invalid-data-structure",
+			mockResponse: map[string]interface{}{
+				"code": 0,
+				"msg":  "success",
+				"data": "invalid",
+			},
+			expectedMetricsCount:      0,
+			expectedScrapeErrorsCount: 1,
 		},
 	}
-	server := setupTestServer(t, ZlmAPIEndpointGetNetworkThreads, mockResponse)
-	defer server.Close()
 
-	logger := logrus.New()
-	options := Options{}
-	exporter, err := NewExporter(server.URL, MockZlmServerSecret, logger, options)
-	assert.NoError(t, err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := setupTestServer(t, ZlmAPIEndpointGetNetworkThreads, tt.mockResponse)
+			defer server.Close()
 
-	ch := make(chan prometheus.Metric, 1)
-	done := make(chan bool)
+			exporter := setupExporter(t, server)
 
-	go func() {
-		exporter.extractNetworkThreads(ch)
-		close(ch)
-		done <- true
-	}()
+			ch := make(chan prometheus.Metric, tt.expectedMetricsCount)
+			done := make(chan bool)
 
-	metrics := make([]prometheus.Metric, 0)
-	for metric := range ch {
-		metrics = append(metrics, metric)
+			go func() {
+				exporter.extractNetworkThreads(ch)
+				close(ch)
+				done <- true
+			}()
+
+			metrics := make([]prometheus.Metric, 0)
+			for metric := range ch {
+				metrics = append(metrics, metric)
+			}
+			<-done
+
+			assert.Equal(t, tt.expectedScrapeErrorsCount, testutil.ToFloat64(scrapeErrors.WithLabelValues(ZlmAPIEndpointGetNetworkThreads)))
+			assert.Equal(t, tt.expectedMetricsCount, len(metrics))
+			teardown()
+		})
 	}
-	<-done
-
-	assert.Equal(t, 3, len(metrics))
 }
 
 func TestExtractWorkThreads(t *testing.T) {
-	mockResponse := ZLMAPIResponse[APIWorkThreadsObjects]{
-		Code: 0,
-		Msg:  "success",
-		Data: APIWorkThreadsObjects{
-			APIWorkThreadsObject{
-				Load:  100,
-				Delay: 100,
+	tests := []struct {
+		name                      string
+		mockResponse              map[string]interface{}
+		expectedMetricsCount      int
+		expectedScrapeErrorsCount float64
+	}{
+		{
+			name: "success",
+			mockResponse: map[string]interface{}{
+				"code": 0,
+				"msg":  "success",
+				"data": []map[string]interface{}{
+					{
+						"load":  100,
+						"delay": 100,
+					},
+					{
+						"load":  200,
+						"delay": 200,
+					},
+				},
 			},
-			APIWorkThreadsObject{
-				Load:  200,
-				Delay: 200,
+			expectedMetricsCount:      3, // WorkThreadsTotal + 2个工作线程的负载数据
+			expectedScrapeErrorsCount: 0,
+		},
+		{
+			name: "error-code-not-0",
+			mockResponse: map[string]interface{}{
+				"code": 1,
+				"msg":  "error",
 			},
+			expectedMetricsCount:      0,
+			expectedScrapeErrorsCount: 1,
+		},
+		{
+			name: "error-invalid-data-structure",
+			mockResponse: map[string]interface{}{
+				"code": 0,
+				"msg":  "success",
+				"data": "invalid",
+			},
+			expectedMetricsCount:      0,
+			expectedScrapeErrorsCount: 1,
 		},
 	}
-	server := setupTestServer(t, ZlmAPIEndpointGetWorkThreads, mockResponse)
-	defer server.Close()
 
-	logger := logrus.New()
-	options := Options{}
-	exporter, err := NewExporter(server.URL, MockZlmServerSecret, logger, options)
-	assert.NoError(t, err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := setupTestServer(t, ZlmAPIEndpointGetWorkThreads, tt.mockResponse)
+			defer server.Close()
 
-	ch := make(chan prometheus.Metric, 1)
-	done := make(chan bool)
+			exporter := setupExporter(t, server)
 
-	go func() {
-		exporter.extractWorkThreads(ch)
-		close(ch)
-		done <- true
-	}()
+			ch := make(chan prometheus.Metric, tt.expectedMetricsCount)
+			done := make(chan bool)
 
-	metrics := make([]prometheus.Metric, 0)
-	for metric := range ch {
-		metrics = append(metrics, metric)
+			go func() {
+				exporter.extractWorkThreads(ch)
+				close(ch)
+				done <- true
+			}()
+
+			metrics := make([]prometheus.Metric, 0)
+			for metric := range ch {
+				metrics = append(metrics, metric)
+			}
+			<-done
+
+			assert.Equal(t, tt.expectedScrapeErrorsCount, testutil.ToFloat64(scrapeErrors.WithLabelValues(ZlmAPIEndpointGetWorkThreads)))
+			assert.Equal(t, tt.expectedMetricsCount, len(metrics))
+			scrapeErrors.Reset()
+		})
 	}
-	<-done
-
-	assert.Equal(t, 3, len(metrics))
 }
 
 func TestExtractStatistics(t *testing.T) {
@@ -633,6 +795,7 @@ func TestExtractStatistics(t *testing.T) {
 	<-done
 
 	assert.Equal(t, 16, len(metrics))
+	teardown()
 }
 
 func TestExtractSession(t *testing.T) {
@@ -684,6 +847,7 @@ func TestExtractSession(t *testing.T) {
 	<-done
 
 	assert.Equal(t, 3, len(metrics))
+	teardown()
 }
 
 func TestExtractStreamInfo(t *testing.T) {
@@ -743,6 +907,7 @@ func TestExtractStreamInfo(t *testing.T) {
 	<-done
 
 	assert.Equal(t, 10, len(metrics))
+	teardown()
 }
 
 func TestExtractRtpServer(t *testing.T) {
@@ -784,6 +949,7 @@ func TestExtractRtpServer(t *testing.T) {
 	<-done
 
 	assert.Equal(t, 3, len(metrics))
+	teardown()
 }
 
 func TestMustNewConstMetric(t *testing.T) {
