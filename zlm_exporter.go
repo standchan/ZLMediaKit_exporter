@@ -630,11 +630,13 @@ func newLogger(logFormat, logLevel string) *logrus.Logger {
 }
 
 var (
-	webConfig      = webflag.AddFlags(kingpin.CommandLine, ":9101")
-	zlmScrapeURI   = kingpin.Flag("scrape-uri", "URI on which to scrape zlmediakit.").Default(getEnv("ZLM_EXPORTER_SCRAPE_URI", "http://localhost")).String()
-	zlmScrapePath  = kingpin.Flag("metric-path", "Path under which to expose metrics.").Default(getEnv("ZLM_EXPORTER_METRICS_PATH", "/metrics")).String()
-	zlmSecret      = kingpin.Flag("secret", "Secret for the scrape URI").Default(getEnv("ZLM_EXPORTER_SECRET", "")).String()
-	zlmMetricsOnly = kingpin.Flag("metrics-only", "Only export metrics, not other key-value metrics").Default(getEnv("ZLM_EXPORTER_METRICS_ONLY", "true")).Bool()
+	// todo 这里要变成能修改的，要用上zlmExporterWebAddress
+	webConfig             = webflag.AddFlags(kingpin.CommandLine, ":9101")
+	zlmExporterScrapeURI  = kingpin.Flag("scrape-uri", "URI on which to scrape zlmediakit.").Default(getEnv("ZLM_EXPORTER_SCRAPE_URI", "http://localhost")).String()
+	zlmExporterWebAddress = kingpin.Flag("web-address", "Address to expose metrics.").Default(getEnv("ZLM_EXPORTER_WEB_TELEMETRY_ADDRESS", ":9101")).String()
+	zlmScrapePath         = kingpin.Flag("metric-path", "Path under which to expose metrics.").Default(getEnv("ZLM_EXPORTER_WEB_TELEMETRY_PATH", "/metrics")).String()
+	zlmSecret             = kingpin.Flag("secret", "Secret for the scrape URI").Default(getEnv("ZLM_EXPORTER_SCRAPE_SECRET", "")).String()
+	zlmMetricsOnly        = kingpin.Flag("metrics-only", "Only export metrics, not other key-value metrics").Default(getEnv("ZLM_EXPORTER_METRICS_ONLY", "true")).Bool()
 
 	timeout   = kingpin.Flag("timeout", "Timeout for the scrape URI").Default(getEnv("ZLM_EXPORTER_TIMEOUT", "10s")).Duration()
 	sslVerify = kingpin.Flag("ssl-verify", "SSL verify").Default(getEnv("ZLM_EXPORTER_SSL_VERIFY", "false")).Bool()
@@ -667,7 +669,7 @@ func main() {
 		SSLVerify: *sslVerify,
 	}
 
-	exporter, err := NewExporter(*zlmScrapeURI, *zlmSecret, log, option)
+	exporter, err := NewExporter(*zlmExporterScrapeURI, *zlmSecret, log, option)
 	if err != nil {
 		log.Fatalln("msg", "Error creating exporter", "err", err)
 	}
@@ -679,7 +681,9 @@ func main() {
 	registry.MustRegister(exporter)
 
 	http.Handle(*zlmScrapePath, promhttp.HandlerFor(registry, promhttp.HandlerOpts{}))
-	srv := &http.Server{}
+	srv := &http.Server{
+		// Addr: *zlmExporterWebAddress,
+	}
 
 	go func() {
 		if err := web.ListenAndServe(srv, webConfig, promlog.New(promlogConfig)); err != nil {
