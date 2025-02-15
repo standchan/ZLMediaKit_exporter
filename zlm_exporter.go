@@ -661,6 +661,7 @@ var (
 func main() {
 
 	promlogConfig := &promlog.Config{}
+	// todo: 两个 kingpin.CommandLine ,可能有问题
 	flag.AddFlags(kingpin.CommandLine, promlogConfig)
 	kingpin.Version(version.Print("zlm_exporter"))
 	kingpin.HelpFlag.Short('h')
