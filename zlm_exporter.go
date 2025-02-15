@@ -630,18 +630,25 @@ func newLogger(logFormat, logLevel string) *logrus.Logger {
 
 var (
 	webFlagConfig = webflag.AddFlags(kingpin.CommandLine, ":9101")
+	webTimeout    = kingpin.Flag("web.timeout", "Timeout for HTTP requests").
+			Default(getEnv("ZLM_EXPORTER_TIMEOUT", "10s")).Duration()
+	webSSLVerify = kingpin.Flag("web.ssl-verify", "SSL verify").
+			Default(getEnv("ZLM_EXPORTER_SSL_VERIFY", "false")).Bool()
 
-	zlmediakitApiAddr   = kingpin.Flag("scrape-url", "URI on which to scrape zlmediakit metrics(ZlMediaKit apiServer url).").Default(getEnv("ZLMEDIAKIT_API_ADDRESS", "http://localhost")).String()
-	zlmediakitApiSecret = kingpin.Flag("secret", "Secret for the access zlmediakit api").Default(getEnv("ZLMEDIAKIT_API_SECRET", "")).String()
+	zlmApiURL = kingpin.Flag("zlm.scrape-url", "URI on which to scrape zlmediakit metrics(ZlMediaKit apiServer url).").
+			Default(getEnv("ZLMEDIAKIT_API_ADDRESS", "http://localhost")).String()
+	zlmApiSecret = kingpin.Flag("zlm.secret", "Secret for the access zlmediakit api").
+			Default(getEnv("ZLMEDIAKIT_API_SECRET", "")).String()
 
-	zlmExporterScrapePath  = kingpin.Flag("metric-path", "Path under which to expose metrics.").Default(getEnv("ZLM_EXPORTER_WEB_TELEMETRY_PATH", "/metrics")).String()
-	zlmExporterMetricsOnly = kingpin.Flag("metrics-only", "Only export metrics, not other key-value metrics").Default(getEnv("ZLM_EXPORTER_METRICS_ONLY", "true")).Bool()
+	exporterMetricPath = kingpin.Flag("exporter.metric-path", "Path under which to expose metrics.").
+				Default(getEnv("ZLM_EXPORTER_WEB_TELEMETRY_PATH", "/metrics")).String()
+	exporterMetricOnly = kingpin.Flag("exporter.metric-only", "Only export metrics, not other key-value metrics").
+				Default(getEnv("ZLM_EXPORTER_METRICS_ONLY", "true")).Bool()
 
-	timeout   = kingpin.Flag("timeout", "Timeout for the scrape URI").Default(getEnv("ZLM_EXPORTER_TIMEOUT", "10s")).Duration()
-	sslVerify = kingpin.Flag("ssl-verify", "SSL verify").Default(getEnv("ZLM_EXPORTER_SSL_VERIFY", "false")).Bool()
-
-	logFormat = kingpin.Flag("log-format", "Log format, valid options are txt and json").Default(getEnv("ZLM_EXPORTER_LOG_FORMAT", "txt")).String()
-	logLevel  = kingpin.Flag("log-level", "Log level, valid options are debug, info, warn, error, fatal, panic").Default(getEnv("ZLM_EXPORTER_LOG_LEVEL", "info")).String()
+	logFormat = kingpin.Flag("log.format", "Log format, valid options are txt and json").
+			Default(getEnv("ZLM_EXPORTER_LOG_FORMAT", "txt")).String()
+	logLevel = kingpin.Flag("log.level", "Log level, valid options are debug, info, warn, error, fatal, panic").
+			Default(getEnv("ZLM_EXPORTER_LOG_LEVEL", "info")).String()
 )
 
 // doc: https://prometheus.io/docs/instrumenting/writing_exporters/
@@ -664,22 +671,22 @@ func main() {
 	)
 
 	option := Options{
-		Timeout:   *timeout,
-		SSLVerify: *sslVerify,
+		Timeout:   *webTimeout,
+		SSLVerify: *webSSLVerify,
 	}
 
-	exporter, err := NewExporter(*zlmediakitApiAddr, *zlmediakitApiSecret, log, option)
+	exporter, err := NewExporter(*zlmApiURL, *zlmApiSecret, log, option)
 	if err != nil {
 		log.Fatalln("msg", "Error creating exporter", "err", err)
 	}
 
 	registry := prometheus.NewRegistry()
-	if !*zlmExporterMetricsOnly {
+	if !*exporterMetricOnly {
 		registry = prometheus.DefaultRegisterer.(*prometheus.Registry)
 	}
 	registry.MustRegister(exporter)
 
-	http.Handle(*zlmExporterScrapePath, promhttp.HandlerFor(registry, promhttp.HandlerOpts{}))
+	http.Handle(*exporterMetricPath, promhttp.HandlerFor(registry, promhttp.HandlerOpts{}))
 	svr := &http.Server{}
 
 	go func() {
