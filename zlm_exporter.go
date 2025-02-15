@@ -635,20 +635,25 @@ var (
 	webSSLVerify = kingpin.Flag("web.ssl-verify", "SSL verify").
 			Default(getEnv("ZLM_EXPORTER_SSL_VERIFY", "false")).Bool()
 
-	zlmApiURL = kingpin.Flag("zlm.scrape-url", "URI on which to scrape zlmediakit metrics(ZlMediaKit apiServer url).").
-			Default(getEnv("ZLMEDIAKIT_API_ADDRESS", "http://localhost")).String()
+	zlmApiURL = kingpin.Flag("zlm.scrape-url",
+		"URI on which to scrape zlmediakit metrics(ZlMediaKit apiServer url).").
+		Default(getEnv("ZLM_API_ADDRESS", "http://localhost")).String()
 	zlmApiSecret = kingpin.Flag("zlm.secret", "Secret for the access zlmediakit api").
-			Default(getEnv("ZLMEDIAKIT_API_SECRET", "")).String()
+			Default(getEnv("ZLM_API_SECRET", "")).String()
 
-	exporterMetricPath = kingpin.Flag("exporter.metric-path", "Path under which to expose metrics.").
-				Default(getEnv("ZLM_EXPORTER_WEB_TELEMETRY_PATH", "/metrics")).String()
-	exporterMetricOnly = kingpin.Flag("exporter.metric-only", "Only export metrics, not other key-value metrics").
-				Default(getEnv("ZLM_EXPORTER_METRICS_ONLY", "true")).Bool()
+	zlmExporterMetricPath = kingpin.Flag("exporter.metric-path",
+		"Path under which to expose metrics.").
+		Default(getEnv("ZLM_EXPORTER_WEB_TELEMETRY_PATH", "/metrics")).String()
+	zlmExporterMetricOnly = kingpin.Flag("exporter.metric-only",
+		"Only export metrics, not other key-value metrics").
+		Default(getEnv("ZLM_EXPORTER_METRICS_ONLY", "true")).Bool()
 
-	logFormat = kingpin.Flag("log.format", "Log format, valid options are txt and json").
-			Default(getEnv("ZLM_EXPORTER_LOG_FORMAT", "txt")).String()
-	logLevel = kingpin.Flag("log.level", "Log level, valid options are debug, info, warn, error, fatal, panic").
-			Default(getEnv("ZLM_EXPORTER_LOG_LEVEL", "info")).String()
+	logFormat = kingpin.Flag("log.format",
+		"Log format, valid options are txt and json").
+		Default(getEnv("ZLM_EXPORTER_LOG_FORMAT", "txt")).String()
+	logLevel = kingpin.Flag("log.level",
+		"Log level, valid options are debug, info, warn, error, fatal, panic").
+		Default(getEnv("ZLM_EXPORTER_LOG_LEVEL", "info")).String()
 )
 
 // doc: https://prometheus.io/docs/instrumenting/writing_exporters/
@@ -681,12 +686,12 @@ func main() {
 	}
 
 	registry := prometheus.NewRegistry()
-	if !*exporterMetricOnly {
+	if !*zlmExporterMetricOnly {
 		registry = prometheus.DefaultRegisterer.(*prometheus.Registry)
 	}
 	registry.MustRegister(exporter)
 
-	http.Handle(*exporterMetricPath, promhttp.HandlerFor(registry, promhttp.HandlerOpts{}))
+	http.Handle(*zlmExporterMetricPath, promhttp.HandlerFor(registry, promhttp.HandlerOpts{}))
 	svr := &http.Server{}
 
 	go func() {
