@@ -23,7 +23,7 @@ import (
 	"github.com/prometheus/common/promlog"
 	"github.com/prometheus/common/promlog/flag"
 	"github.com/prometheus/common/version"
-	"github.com/prometheus/exporter-toolkit/web"
+	promweb "github.com/prometheus/exporter-toolkit/web"
 	webflag "github.com/prometheus/exporter-toolkit/web/kingpinflag"
 	"github.com/sirupsen/logrus"
 )
@@ -629,12 +629,11 @@ func newLogger(logFormat, logLevel string) *logrus.Logger {
 }
 
 var (
-	// todo 这里要变成能修改的，要用上zlmExporterWebAddress
-	webConfig           = webflag.AddFlags(kingpin.CommandLine, ":9101")
-	zlmediakitApiAddr   = kingpin.Flag("scrape-uri", "URI on which to scrape zlmediakit metrics(ZlMediaKit apiServer url).").Default(getEnv("ZLMEDIAKIT_API_ADDRESS", "http://localhost")).String()
+	webFlagConfig = webflag.AddFlags(kingpin.CommandLine, ":9101")
+
+	zlmediakitApiAddr   = kingpin.Flag("scrape-url", "URI on which to scrape zlmediakit metrics(ZlMediaKit apiServer url).").Default(getEnv("ZLMEDIAKIT_API_ADDRESS", "http://localhost")).String()
 	zlmediakitApiSecret = kingpin.Flag("secret", "Secret for the access zlmediakit api").Default(getEnv("ZLMEDIAKIT_API_SECRET", "")).String()
 
-	zlmExporterWebAddress  = kingpin.Flag("web-address", "Address to expose metrics.").Default(getEnv("ZLM_EXPORTER_WEB_TELEMETRY_ADDRESS", ":9101")).String()
 	zlmExporterScrapePath  = kingpin.Flag("metric-path", "Path under which to expose metrics.").Default(getEnv("ZLM_EXPORTER_WEB_TELEMETRY_PATH", "/metrics")).String()
 	zlmExporterMetricsOnly = kingpin.Flag("metrics-only", "Only export metrics, not other key-value metrics").Default(getEnv("ZLM_EXPORTER_METRICS_ONLY", "true")).Bool()
 
@@ -681,12 +680,10 @@ func main() {
 	registry.MustRegister(exporter)
 
 	http.Handle(*zlmExporterScrapePath, promhttp.HandlerFor(registry, promhttp.HandlerOpts{}))
-	srv := &http.Server{
-		// Addr: *zlmExporterWebAddress,
-	}
+	svr := &http.Server{}
 
 	go func() {
-		if err := web.ListenAndServe(srv, webConfig, promlog.New(promlogConfig)); err != nil {
+		if err := promweb.ListenAndServe(svr, webFlagConfig, promlog.New(promlogConfig)); err != nil {
 			log.Fatalln("msg", "Error starting HTTP server", "err", err)
 		}
 		log.Infoln("zlm_exporter started successfully")
@@ -702,7 +699,7 @@ func main() {
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
 
-		if err := srv.Shutdown(ctx); err != nil {
+		if err := svr.Shutdown(ctx); err != nil {
 			log.Fatalf("zlm_exporter shutdown failed: %v", err)
 		}
 		log.Infoln("zlm_exporter shutdown gracefully")
