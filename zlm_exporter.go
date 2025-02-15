@@ -637,7 +637,7 @@ var (
 
 	zlmApiURL = kingpin.Flag("zlm.scrape-url",
 		"URI on which to scrape zlmediakit metrics(ZlMediaKit apiServer url).").
-		Default(getEnv("ZLM_API_ADDRESS", "http://localhost")).String()
+		Default(getEnv("ZLM_API_URL", "http://localhost")).String()
 	zlmApiSecret = kingpin.Flag("zlm.secret", "Secret for the access zlmediakit api").
 			Default(getEnv("ZLM_API_SECRET", "")).String()
 
@@ -646,7 +646,7 @@ var (
 		Default(getEnv("ZLM_EXPORTER_WEB_TELEMETRY_PATH", "/metrics")).String()
 	zlmExporterMetricOnly = kingpin.Flag("exporter.metric-only",
 		"Only export metrics, not other key-value metrics").
-		Default(getEnv("ZLM_EXPORTER_METRICS_ONLY", "true")).Bool()
+		Default(getEnv("ZLM_EXPORTER_METRIC_ONLY", "true")).Bool()
 
 	logFormat = kingpin.Flag("log.format",
 		"Log format, valid options are txt and json").
