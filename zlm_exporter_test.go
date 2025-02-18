@@ -23,14 +23,9 @@ import (
 // most of unittest powered by cursor
 // WIP
 var (
-	MockZlmServerPort    = "9999"
-	MockZlmServerAddr    = fmt.Sprintf("localhost:%s", MockZlmServerPort)
-	MockZlmServerSecret  = "test-secret"
-	MockZlmServerHandler = gin.Default()
-
-	TestServerHandler = gin.Default()
-	TestServerAddr    = ":9101"
-	TestServerSecret  = "test-secret"
+	MockZlmAPIServerAddr    = "http://localhost:9999"
+	MockZlmAPIServerSecret  = "test-secret"
+	MockZlmAPIServerHandler = gin.Default()
 )
 
 func setup() {
@@ -38,7 +33,7 @@ func setup() {
 }
 
 func setupZlmApiServer() {
-	r := MockZlmServerHandler
+	r := MockZlmAPIServerHandler
 	r.GET("index/api/version", func(c *gin.Context) {
 		c.JSON(http.StatusOK, readTestData("version"))
 	})
@@ -76,11 +71,12 @@ func setupZlmApiServer() {
 	})
 
 	go func() {
-		err := r.Run(MockZlmServerAddr)
+		err := r.Run(":9999")
 		if err != nil {
 			log.Fatal(err)
 		}
 	}()
+	time.Sleep(2 * time.Second)
 }
 
 func readTestData(name string) map[string]any {
@@ -117,7 +113,7 @@ func TestMetricsDescribe(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			logger := logrus.New()
 			options := Options{}
-			exporter, err := NewExporter("http://localhost", MockZlmServerSecret, logger, options)
+			exporter, err := NewExporter("http://localhost", MockZlmAPIServerSecret, logger, options)
 			assert.NoError(t, err)
 
 			ch := make(chan *prometheus.Desc, tt.metricsCount)
@@ -189,7 +185,7 @@ func TestMetricsCollect(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			logger := logrus.New()
 			options := Options{}
-			exporter, err := NewExporter(MockZlmServerAddr, MockZlmServerSecret, logger, options)
+			exporter, err := NewExporter(MockZlmAPIServerAddr, MockZlmAPIServerSecret, logger, options)
 			assert.NoError(t, err)
 
 			ch := make(chan prometheus.Metric, tt.metricsCount)
@@ -248,7 +244,7 @@ func TestFetchHTTPErrorHandling(t *testing.T) {
 				Timeout:   1 * time.Second,
 				SSLVerify: true,
 			}
-			exporter, err := NewExporter(server.URL, MockZlmServerSecret, logger, options)
+			exporter, err := NewExporter(server.URL, MockZlmAPIServerSecret, logger, options)
 			assert.NoError(t, err)
 
 			ch := make(chan prometheus.Metric, 1)
@@ -285,7 +281,7 @@ func TestFetchHTTPConcurrency(t *testing.T) {
 
 	logger := logrus.New()
 	options := Options{}
-	exporter, err := NewExporter(server.URL, MockZlmServerSecret, logger, options)
+	exporter, err := NewExporter(server.URL, MockZlmAPIServerSecret, logger, options)
 	assert.NoError(t, err)
 
 	ch := make(chan prometheus.Metric, 10)
@@ -398,13 +394,13 @@ func TestNewExporter(t *testing.T) {
 		{
 			name:        "有效的URI和Secret",
 			uri:         "http://localhost:8080",
-			secret:      MockZlmServerSecret,
+			secret:      MockZlmAPIServerSecret,
 			shouldError: false,
 		},
 		{
 			name:        "空URI",
 			uri:         "",
-			secret:      MockZlmServerSecret,
+			secret:      MockZlmAPIServerSecret,
 			shouldError: true,
 		},
 		{
@@ -445,7 +441,7 @@ func setupTestServer(t *testing.T, endpoint string, response interface{}) *httpt
 func setupExporter(t *testing.T, server *httptest.Server) *Exporter {
 	logger := logrus.New()
 	options := Options{}
-	exporter, err := NewExporter(server.URL, MockZlmServerSecret, logger, options)
+	exporter, err := NewExporter(server.URL, MockZlmAPIServerSecret, logger, options)
 	assert.NoError(t, err)
 	return exporter
 }
@@ -776,7 +772,7 @@ func TestExtractStatistics(t *testing.T) {
 
 	logger := logrus.New()
 	options := Options{}
-	exporter, err := NewExporter(server.URL, MockZlmServerSecret, logger, options)
+	exporter, err := NewExporter(server.URL, MockZlmAPIServerSecret, logger, options)
 	assert.NoError(t, err)
 
 	ch := make(chan prometheus.Metric, 1)
@@ -828,7 +824,7 @@ func TestExtractSession(t *testing.T) {
 
 	logger := logrus.New()
 	options := Options{}
-	exporter, err := NewExporter(server.URL, MockZlmServerSecret, logger, options)
+	exporter, err := NewExporter(server.URL, MockZlmAPIServerSecret, logger, options)
 	assert.NoError(t, err)
 
 	ch := make(chan prometheus.Metric, 1)
@@ -888,7 +884,7 @@ func TestExtractStreamInfo(t *testing.T) {
 
 	logger := logrus.New()
 	options := Options{}
-	exporter, err := NewExporter(server.URL, MockZlmServerSecret, logger, options)
+	exporter, err := NewExporter(server.URL, MockZlmAPIServerSecret, logger, options)
 	assert.NoError(t, err)
 
 	ch := make(chan prometheus.Metric, 1)
@@ -930,7 +926,7 @@ func TestExtractRtpServer(t *testing.T) {
 
 	logger := logrus.New()
 	options := Options{}
-	exporter, err := NewExporter(server.URL, MockZlmServerSecret, logger, options)
+	exporter, err := NewExporter(server.URL, MockZlmAPIServerSecret, logger, options)
 	assert.NoError(t, err)
 
 	ch := make(chan prometheus.Metric, 1)
@@ -955,7 +951,7 @@ func TestExtractRtpServer(t *testing.T) {
 func TestMustNewConstMetric(t *testing.T) {
 	logger := logrus.New()
 	options := Options{}
-	exporter, err := NewExporter("http://localhost", MockZlmServerSecret, logger, options)
+	exporter, err := NewExporter("http://localhost", MockZlmAPIServerSecret, logger, options)
 	assert.NoError(t, err)
 
 	tests := []struct {

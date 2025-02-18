@@ -352,6 +352,7 @@ func (e *Exporter) extractAPIStatus(ch chan<- prometheus.Metric) {
 		data := apiResponse.Data
 
 		for _, endpoint := range data {
+			// fixme：单元测试中，出现了阻塞问题
 			ch <- prometheus.MustNewConstMetric(ApiStatus, prometheus.GaugeValue, 1, endpoint)
 		}
 		return nil
@@ -681,7 +682,7 @@ func main() {
 
 	exporter, err := NewExporter(*zlmApiURL, *zlmApiSecret, log, option)
 	if err != nil {
-		log.Fatalln("msg", "Error creating exporter", "err", err)
+		log.Fatalln("Error NewExporter failed:", err)
 	}
 
 	registry := prometheus.NewRegistry()
