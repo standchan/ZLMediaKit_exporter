@@ -680,6 +680,7 @@ func main() {
 		SSLVerify: *webSSLVerify,
 	}
 
+	// todo：并发情况下，可能出现阻塞问题
 	exporter, err := NewExporter(*zlmApiURL, *zlmApiSecret, log, option)
 	if err != nil {
 		log.Fatalln("Error NewExporter failed:", err)
