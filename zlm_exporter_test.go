@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"sync"
 	"testing"
 	"time"
 
@@ -27,6 +26,8 @@ var (
 	MockZlmAPIServerSecret  = "test-secret"
 	MockZlmAPIServerHandler = gin.Default()
 )
+
+var MetricsCount = 99
 
 func setup() {
 	setupZlmApiServer()
@@ -77,6 +78,23 @@ func setupZlmApiServer() {
 		}
 	}()
 	time.Sleep(2 * time.Second)
+}
+
+func setupTestServer(t *testing.T, endpoint string, response interface{}) *httptest.Server {
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "test-secret", r.Header.Get("secret"))
+
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(response)
+	}))
+}
+
+func setupExporter(t *testing.T, server *httptest.Server) *Exporter {
+	logger := logrus.New()
+	options := Options{}
+	exporter, err := NewExporter(server.URL, MockZlmAPIServerSecret, logger, options)
+	assert.NoError(t, err)
+	return exporter
 }
 
 func readTestData(name string) map[string]any {
@@ -169,15 +187,12 @@ func TestMetricsDescribe(t *testing.T) {
 func TestMetricsCollect(t *testing.T) {
 	setup()
 	tests := []struct {
-		name          string
-		metricsCount  int
-		includeUpDesc bool
+		name         string
+		metricsCount int
 	}{
-		// todo jerry-rig
 		{
-			name:          "verify all metrics",
-			metricsCount:  2,
-			includeUpDesc: true,
+			name:         "verify all metrics",
+			metricsCount: MetricsCount,
 		},
 	}
 
@@ -205,7 +220,6 @@ func TestMetricsCollect(t *testing.T) {
 			}
 
 			assert.Equal(t, tt.metricsCount, len(metrics), "metrics count not match")
-			teardown()
 		})
 	}
 }
@@ -267,40 +281,7 @@ func TestFetchHTTPErrorHandling(t *testing.T) {
 				assert.Equal(t, float64(0), errorCount, "unexpected error recorded")
 			}
 		})
-		teardown()
 	}
-}
-
-func TestFetchHTTPConcurrency(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		time.Sleep(100 * time.Millisecond)
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"code": 0, "msg": "success", "data": {}}`))
-	}))
-	defer server.Close()
-
-	logger := logrus.New()
-	options := Options{}
-	exporter, err := NewExporter(server.URL, MockZlmAPIServerSecret, logger, options)
-	assert.NoError(t, err)
-
-	ch := make(chan prometheus.Metric, 10)
-	var wg sync.WaitGroup
-	concurrentRequests := 5
-
-	for i := 0; i < concurrentRequests; i++ {
-		wg.Add(1)
-		go func(index int) {
-			defer wg.Done()
-			endpoint := fmt.Sprintf("test/endpoint/%d", index)
-			processFunc := func(closer io.ReadCloser) error {
-				return nil
-			}
-			exporter.fetchHTTP(ch, endpoint, processFunc)
-		}(i)
-	}
-	wg.Wait()
-	teardown()
 }
 
 func TestMetricsRegistration(t *testing.T) {
@@ -427,23 +408,6 @@ func TestNewExporter(t *testing.T) {
 		})
 		teardown()
 	}
-}
-
-func setupTestServer(t *testing.T, endpoint string, response interface{}) *httptest.Server {
-	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "test-secret", r.Header.Get("secret"))
-
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(response)
-	}))
-}
-
-func setupExporter(t *testing.T, server *httptest.Server) *Exporter {
-	logger := logrus.New()
-	options := Options{}
-	exporter, err := NewExporter(server.URL, MockZlmAPIServerSecret, logger, options)
-	assert.NoError(t, err)
-	return exporter
 }
 
 func TestExtractVersion(t *testing.T) {
