@@ -178,9 +178,20 @@ func NewExporter(uri string, secret string, logger *logrus.Logger, options Optio
 		return nil, fmt.Errorf("zlMediaKit secret is required")
 	}
 
+	client := http.Client{
+		Timeout: options.Timeout,
+	}
+
+	if options.SSLVerify {
+		client.Transport = &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		}
+	}
+
 	exporter := &Exporter{
 		scrapeURI:    uri,
 		scrapeSecret: secret,
+		client:       client,
 
 		up: prometheus.NewGauge(prometheus.GaugeOpts{
 			Namespace: Namespace,
@@ -290,16 +301,6 @@ func (e *Exporter) fetchHTTP(ch chan<- prometheus.Metric, endpoint string, proce
 		Header: http.Header{
 			"secret": []string{e.scrapeSecret},
 		},
-	}
-
-	if e.options.Timeout != 0 {
-		e.client.Timeout = e.options.Timeout
-	}
-
-	if e.options.SSLVerify {
-		e.client.Transport = &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		}
 	}
 
 	res, err := e.client.Do(req)
@@ -680,7 +681,6 @@ func main() {
 		SSLVerify: *webSSLVerify,
 	}
 
-	// todo：并发情况下，可能出现阻塞问题
 	exporter, err := NewExporter(*zlmApiURL, *zlmApiSecret, log, option)
 	if err != nil {
 		log.Fatalln("Error NewExporter failed:", err)
