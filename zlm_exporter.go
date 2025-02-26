@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"reflect"
 	"runtime"
 	"strconv"
 	"sync"
@@ -21,7 +22,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/prometheus/common/promlog"
-	"github.com/prometheus/common/promlog/flag"
 	"github.com/prometheus/common/version"
 	promweb "github.com/prometheus/exporter-toolkit/web"
 	webflag "github.com/prometheus/exporter-toolkit/web/kingpinflag"
@@ -249,14 +249,46 @@ func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 
 func (e *Exporter) scrape(ch chan<- prometheus.Metric) (up float64) {
 	e.totalScrapes.Inc()
-	e.extractVersion(ch)
-	e.extractAPIStatus(ch)
-	e.extractNetworkThreads(ch)
-	e.extractWorkThreads(ch)
-	e.extractStatistics(ch)
-	e.extractSession(ch)
-	e.extractStream(ch)
-	e.extractRtp(ch)
+
+	var wg sync.WaitGroup
+	ctx, cancel := context.WithTimeout(context.Background(), e.options.Timeout)
+	defer cancel()
+
+	wg.Add(8)
+	go func() {
+		defer wg.Done()
+		e.extractVersion(ctx, ch)
+	}()
+	go func() {
+		defer wg.Done()
+		e.extractAPIStatus(ctx, ch)
+	}()
+	go func() {
+		defer wg.Done()
+		e.extractNetworkThreads(ctx, ch)
+	}()
+	go func() {
+		defer wg.Done()
+		e.extractWorkThreads(ctx, ch)
+	}()
+	go func() {
+		defer wg.Done()
+		e.extractStatistics(ctx, ch)
+	}()
+	go func() {
+		defer wg.Done()
+		e.extractSession(ctx, ch)
+	}()
+	go func() {
+		defer wg.Done()
+		e.extractStream(ctx, ch)
+	}()
+	go func() {
+		defer wg.Done()
+		e.extractRtp(ctx, ch)
+	}()
+
+	wg.Wait()
 	return 1
 }
 
@@ -286,7 +318,33 @@ func (e *Exporter) mustNewConstMetric(desc *prometheus.Desc, valueType prometheu
 	}
 }
 
-func (e *Exporter) fetchHTTP(ch chan<- prometheus.Metric, endpoint string, processFunc func(closer io.ReadCloser) error) {
+func (e *Exporter) processAPIResponse(endpoint string, body io.ReadCloser, result interface{}) error {
+	decoder := json.NewDecoder(body)
+	if err := decoder.Decode(result); err != nil {
+		return fmt.Errorf("error decoding JSON response from %s: %w", endpoint, err)
+	}
+
+	v := reflect.ValueOf(result).Elem()
+	codeField := v.FieldByName("Code")
+
+	if !codeField.IsValid() {
+		return fmt.Errorf("response structure does not contain Code field")
+	}
+
+	code := codeField.Int()
+	if code != int64(ZlmAPISuccessCode) {
+		msgField := v.FieldByName("Msg")
+		var msg string
+		if msgField.IsValid() {
+			msg = msgField.String()
+		}
+		return fmt.Errorf("unexpected API response code from %s: %d, reason: %s", endpoint, code, msg)
+	}
+
+	return nil
+}
+
+func (e *Exporter) fetchHTTP(ctx context.Context, ch chan<- prometheus.Metric, endpoint string, processFunc func(closer io.ReadCloser) error) {
 	uri := fmt.Sprintf("%s/%s", e.scrapeURI, endpoint)
 	parsedURL, err := url.Parse(uri)
 	if err != nil {
@@ -323,42 +381,35 @@ type APIVersionObject struct {
 	CommitHash string `json:"commitHash"`
 }
 
-func (e *Exporter) extractVersion(ch chan<- prometheus.Metric) {
+func (e *Exporter) extractVersion(ctx context.Context, ch chan<- prometheus.Metric) {
 	processFunc := func(body io.ReadCloser) error {
 		var apiResponse ZLMAPIResponse[APIVersionObject]
-		if err := json.NewDecoder(body).Decode(&apiResponse); err != nil {
-			return fmt.Errorf("error decoding JSON response: %w", err)
-		}
-		if apiResponse.Code != 0 {
-			return fmt.Errorf("unexpected API response code: %d,reason: %s", apiResponse.Code, apiResponse.Msg)
+		if err := e.processAPIResponse(ZlmAPIEndpointVersion, body, &apiResponse); err != nil {
+			return err
 		}
 		data := apiResponse.Data
 		ch <- prometheus.MustNewConstMetric(ZLMediaKitInfo, prometheus.GaugeValue, 1, data.BranchName, data.BuildTime, data.CommitHash)
 		return nil
 	}
-	e.fetchHTTP(ch, ZlmAPIEndpointVersion, processFunc)
+	e.fetchHTTP(context.Background(), ch, ZlmAPIEndpointVersion, processFunc)
 }
 
-func (e *Exporter) extractAPIStatus(ch chan<- prometheus.Metric) {
+func (e *Exporter) extractAPIStatus(ctx context.Context, ch chan<- prometheus.Metric) {
 	processFunc := func(body io.ReadCloser) error {
 		var apiResponse ZLMAPIResponse[[]string]
 
-		if err := json.NewDecoder(body).Decode(&apiResponse); err != nil {
-			return fmt.Errorf("error decoding JSON response: %w", err)
-		}
-		if apiResponse.Code != ZlmAPISuccessCode {
-			return fmt.Errorf("unexpected API response code: %d,reason: %s", apiResponse.Code, apiResponse.Msg)
+		if err := e.processAPIResponse(ZlmAPIEndpointGetApiList, body, &apiResponse); err != nil {
+			return err
 		}
 
 		data := apiResponse.Data
 
 		for _, endpoint := range data {
-			// fixme：单元测试中，出现了阻塞问题
 			ch <- prometheus.MustNewConstMetric(ApiStatus, prometheus.GaugeValue, 1, endpoint)
 		}
 		return nil
 	}
-	e.fetchHTTP(ch, ZlmAPIEndpointGetApiList, processFunc)
+	e.fetchHTTP(context.Background(), ch, ZlmAPIEndpointGetApiList, processFunc)
 }
 
 type APINetworkThreadsObject struct {
@@ -368,14 +419,11 @@ type APINetworkThreadsObject struct {
 
 type APINetworkThreadsObjects []APINetworkThreadsObject
 
-func (e *Exporter) extractNetworkThreads(ch chan<- prometheus.Metric) {
+func (e *Exporter) extractNetworkThreads(ctx context.Context, ch chan<- prometheus.Metric) {
 	processFunc := func(body io.ReadCloser) error {
 		var apiResponse ZLMAPIResponse[APINetworkThreadsObjects]
-		if err := json.NewDecoder(body).Decode(&apiResponse); err != nil {
-			return fmt.Errorf("error decoding JSON response: %w", err)
-		}
-		if apiResponse.Code != ZlmAPISuccessCode {
-			return fmt.Errorf("unexpected API response code: %d,reason: %s", apiResponse.Code, apiResponse.Msg)
+		if err := e.processAPIResponse(ZlmAPIEndpointGetNetworkThreads, body, &apiResponse); err != nil {
+			return err
 		}
 
 		var loadTotal, delayTotal, total float64
@@ -389,7 +437,7 @@ func (e *Exporter) extractNetworkThreads(ch chan<- prometheus.Metric) {
 		ch <- prometheus.MustNewConstMetric(NetworkThreadsDelayTotal, prometheus.GaugeValue, delayTotal)
 		return nil
 	}
-	e.fetchHTTP(ch, ZlmAPIEndpointGetNetworkThreads, processFunc)
+	e.fetchHTTP(context.Background(), ch, ZlmAPIEndpointGetNetworkThreads, processFunc)
 }
 
 type APIWorkThreadsObject struct {
@@ -399,14 +447,11 @@ type APIWorkThreadsObject struct {
 
 type APIWorkThreadsObjects []APIWorkThreadsObject
 
-func (e *Exporter) extractWorkThreads(ch chan<- prometheus.Metric) {
+func (e *Exporter) extractWorkThreads(ctx context.Context, ch chan<- prometheus.Metric) {
 	processFunc := func(body io.ReadCloser) error {
 		var apiResponse ZLMAPIResponse[APIWorkThreadsObjects]
-		if err := json.NewDecoder(body).Decode(&apiResponse); err != nil {
-			return fmt.Errorf("error decoding JSON response: %w", err)
-		}
-		if apiResponse.Code != ZlmAPISuccessCode {
-			return fmt.Errorf("unexpected API response code: %d,reason: %s", apiResponse.Code, apiResponse.Msg)
+		if err := e.processAPIResponse(ZlmAPIEndpointGetWorkThreads, body, &apiResponse); err != nil {
+			return err
 		}
 		var loadTotal, delayTotal, total float64
 		for _, data := range apiResponse.Data {
@@ -419,7 +464,7 @@ func (e *Exporter) extractWorkThreads(ch chan<- prometheus.Metric) {
 		ch <- prometheus.MustNewConstMetric(WorkThreadsDelayTotal, prometheus.GaugeValue, delayTotal)
 		return nil
 	}
-	e.fetchHTTP(ch, ZlmAPIEndpointGetWorkThreads, processFunc)
+	e.fetchHTTP(context.Background(), ch, ZlmAPIEndpointGetWorkThreads, processFunc)
 }
 
 type APIStatisticsObject struct {
@@ -441,14 +486,11 @@ type APIStatisticsObject struct {
 	UdpSession            float64 `json:"UdpSession"`
 }
 
-func (e *Exporter) extractStatistics(ch chan<- prometheus.Metric) {
+func (e *Exporter) extractStatistics(ctx context.Context, ch chan<- prometheus.Metric) {
 	processFunc := func(body io.ReadCloser) error {
 		var apiResponse ZLMAPIResponse[APIStatisticsObject]
-		if err := json.NewDecoder(body).Decode(&apiResponse); err != nil {
-			return fmt.Errorf("error decoding JSON response: %w", err)
-		}
-		if apiResponse.Code != ZlmAPISuccessCode {
-			return fmt.Errorf("unexpected API response code: %d,reason: %s", apiResponse.Code, apiResponse.Msg)
+		if err := e.processAPIResponse(ZlmAPIEndpointGetStatistics, body, &apiResponse); err != nil {
+			return err
 		}
 		data := apiResponse.Data
 		ch <- e.mustNewConstMetric(StatisticsBuffer, prometheus.GaugeValue, data.Buffer)
@@ -469,7 +511,7 @@ func (e *Exporter) extractStatistics(ch chan<- prometheus.Metric) {
 		ch <- e.mustNewConstMetric(StatisticsUdpSession, prometheus.GaugeValue, data.UdpSession)
 		return nil
 	}
-	e.fetchHTTP(ch, ZlmAPIEndpointGetStatistics, processFunc)
+	e.fetchHTTP(context.Background(), ch, ZlmAPIEndpointGetStatistics, processFunc)
 }
 
 type APISessionObject struct {
@@ -484,14 +526,11 @@ type APISessionObject struct {
 
 type APISessionObjects []APISessionObject
 
-func (e *Exporter) extractSession(ch chan<- prometheus.Metric) {
+func (e *Exporter) extractSession(ctx context.Context, ch chan<- prometheus.Metric) {
 	processFunc := func(body io.ReadCloser) error {
 		var apiResponse ZLMAPIResponse[APISessionObjects]
-		if err := json.NewDecoder(body).Decode(&apiResponse); err != nil {
-			return fmt.Errorf("error decoding JSON response: %w", err)
-		}
-		if apiResponse.Code != ZlmAPISuccessCode {
-			return fmt.Errorf("unexpected API response code: %d,reason: %s", apiResponse.Code, apiResponse.Msg)
+		if err := e.processAPIResponse(ZlmAPIEndpointGetAllSession, body, &apiResponse); err != nil {
+			return err
 		}
 		for _, v := range apiResponse.Data {
 			id := v.Id
@@ -506,7 +545,7 @@ func (e *Exporter) extractSession(ch chan<- prometheus.Metric) {
 		ch <- prometheus.MustNewConstMetric(SessionTotal, prometheus.GaugeValue, float64(len(apiResponse.Data)))
 		return nil
 	}
-	e.fetchHTTP(ch, ZlmAPIEndpointGetAllSession, processFunc)
+	e.fetchHTTP(context.Background(), ch, ZlmAPIEndpointGetAllSession, processFunc)
 }
 
 type APIStreamInfoObject struct {
@@ -528,15 +567,11 @@ type APIStreamInfoObjects []APIStreamInfoObject
 // Streams with the same stream name represent the same source stream,
 // while schema indicates the specific protocol.
 // ZLMediaKit automatically pushes the source stream to multiple protocols (schemas) by default.
-func (e *Exporter) extractStream(ch chan<- prometheus.Metric) {
+func (e *Exporter) extractStream(ctx context.Context, ch chan<- prometheus.Metric) {
 	processFunc := func(body io.ReadCloser) error {
 		var apiResponse ZLMAPIResponse[APIStreamInfoObjects]
-		if err := json.NewDecoder(body).Decode(&apiResponse); err != nil {
-			return fmt.Errorf("error decoding JSON response: %w", err)
-		}
-
-		if apiResponse.Code != ZlmAPISuccessCode {
-			return fmt.Errorf("unexpected API response code: %d,reason: %s", apiResponse.Code, apiResponse.Msg)
+		if err := e.processAPIResponse(ZlmAPIEndpointGetStream, body, &apiResponse); err != nil {
+			return err
 		}
 
 		processedStreams := make(map[string]bool)
@@ -581,7 +616,7 @@ func (e *Exporter) extractStream(ch chan<- prometheus.Metric) {
 
 		return nil
 	}
-	e.fetchHTTP(ch, ZlmAPIEndpointGetStream, processFunc)
+	e.fetchHTTP(context.Background(), ch, ZlmAPIEndpointGetStream, processFunc)
 }
 
 type APIRtpServerObject struct {
@@ -591,14 +626,11 @@ type APIRtpServerObject struct {
 
 type APIRtpServerObjects []APIRtpServerObject
 
-func (e *Exporter) extractRtp(ch chan<- prometheus.Metric) {
+func (e *Exporter) extractRtp(ctx context.Context, ch chan<- prometheus.Metric) {
 	processFunc := func(body io.ReadCloser) error {
 		var apiResponse ZLMAPIResponse[APIRtpServerObjects]
-		if err := json.NewDecoder(body).Decode(&apiResponse); err != nil {
-			return fmt.Errorf("error decoding JSON response: %w", err)
-		}
-		if apiResponse.Code != ZlmAPISuccessCode {
-			return fmt.Errorf("unexpected API response code: %d,reason: %s", apiResponse.Code, apiResponse.Msg)
+		if err := e.processAPIResponse(ZlmAPIEndpointListRtpServer, body, &apiResponse); err != nil {
+			return err
 		}
 		for _, v := range apiResponse.Data {
 			rtpPort := v.Port
@@ -608,7 +640,7 @@ func (e *Exporter) extractRtp(ch chan<- prometheus.Metric) {
 		ch <- prometheus.MustNewConstMetric(RtpServerTotal, prometheus.GaugeValue, float64(len(apiResponse.Data)))
 		return nil
 	}
-	e.fetchHTTP(ch, ZlmAPIEndpointListRtpServer, processFunc)
+	e.fetchHTTP(context.Background(), ch, ZlmAPIEndpointListRtpServer, processFunc)
 }
 
 func newLogger(logFormat, logLevel string) *logrus.Logger {
@@ -649,26 +681,16 @@ var (
 	zlmExporterMetricOnly = kingpin.Flag("exporter.metric-only",
 		"Only export metrics, not other key-value metrics").
 		Default(getEnv("ZLM_EXPORTER_METRIC_ONLY", "true")).Bool()
-
-	logFormat = kingpin.Flag("log.format",
-		"Log format, valid options are txt and json").
-		Default(getEnv("ZLM_EXPORTER_LOG_FORMAT", "txt")).String()
-	logLevel = kingpin.Flag("log.level",
-		"Log level, valid options are debug, info, warn, error, fatal, panic").
-		Default(getEnv("ZLM_EXPORTER_LOG_LEVEL", "info")).String()
 )
 
 // doc: https://prometheus.io/docs/instrumenting/writing_exporters/
 // todo: --disable-exporting-key-values
 func main() {
-	promlogConfig := &promlog.Config{}
-	flag.AddFlags(kingpin.CommandLine, promlogConfig)
 	kingpin.Version(version.Print("zlm_exporter"))
 	kingpin.HelpFlag.Short('h')
 	kingpin.Parse()
 
-	log := newLogger(*logFormat, *logLevel)
-
+	log := logrus.New()
 	log.Printf("ZLMediaKit Metrics Exporter %s    build date: %s    sha1: %s    Go: %s    GOOS: %s    GOARCH: %s",
 		BuildVersion, BuildDate, BuildCommitSha,
 		runtime.Version(),
@@ -683,7 +705,7 @@ func main() {
 
 	exporter, err := NewExporter(*zlmApiURL, *zlmApiSecret, log, option)
 	if err != nil {
-		log.Fatalln("Error NewExporter failed:", err)
+		log.Panic("Error NewExporter failed:", err)
 	}
 
 	registry := prometheus.NewRegistry()
@@ -696,27 +718,31 @@ func main() {
 	svr := &http.Server{}
 
 	go func() {
-		if err := promweb.ListenAndServe(svr, webFlagConfig, promlog.New(promlogConfig)); err != nil {
+		if err := promweb.ListenAndServe(svr, webFlagConfig, promlog.New(&promlog.Config{})); err != nil {
 			log.Fatalln("msg", "Error starting HTTP server", "err", err)
 		}
 		log.Infoln("zlm_exporter started successfully")
 	}()
 
 	quit := make(chan os.Signal, 1)
+	done := make(chan bool, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 
 	go func() {
-		_quit := <-quit
-		log.Infof("received %s signal, exiting\n", _quit.String())
+		sig := <-quit
+		log.Infof("received %s signal, shutting down gracefully...", sig.String())
 
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
 
 		if err := svr.Shutdown(ctx); err != nil {
-			log.Fatalf("zlm_exporter shutdown failed: %v", err)
+			log.Errorf("zlm_exporter shutdown error: %v", err)
+		} else {
+			log.Infoln("zlm_exporter shutdown gracefully")
 		}
-		log.Infoln("zlm_exporter shutdown gracefully")
+
+		close(done)
 	}()
 
-	<-quit
+	<-done
 }

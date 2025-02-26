@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -253,12 +254,11 @@ func TestFetchHTTPErrorHandling(t *testing.T) {
 			}))
 			defer server.Close()
 
-			logger := logrus.New()
 			options := Options{
 				Timeout:   1 * time.Second,
 				SSLVerify: true,
 			}
-			exporter, err := NewExporter(server.URL, MockZlmAPIServerSecret, logger, options)
+			exporter, err := NewExporter(server.URL, MockZlmAPIServerSecret, logrus.New(), options)
 			assert.NoError(t, err)
 
 			ch := make(chan prometheus.Metric, 1)
@@ -272,7 +272,7 @@ func TestFetchHTTPErrorHandling(t *testing.T) {
 				return nil
 			}
 
-			exporter.fetchHTTP(ch, endpoint, processFunc)
+			exporter.fetchHTTP(context.Background(), ch, endpoint, processFunc)
 
 			errorCount := testutil.ToFloat64(scrapeErrors.WithLabelValues(endpoint))
 			if tt.expectedError {
@@ -467,7 +467,7 @@ func TestExtractVersion(t *testing.T) {
 			done := make(chan bool)
 
 			go func() {
-				exporter.extractVersion(ch)
+				exporter.extractVersion(context.Background(), ch)
 				close(ch)
 				done <- true
 			}()
@@ -538,7 +538,7 @@ func TestExtractAPIStatus(t *testing.T) {
 			done := make(chan bool)
 
 			go func() {
-				exporter.extractAPIStatus(ch)
+				exporter.extractAPIStatus(context.Background(), ch)
 				close(ch)
 				done <- true
 			}()
@@ -614,7 +614,7 @@ func TestExtractNetworkThreads(t *testing.T) {
 			done := make(chan bool)
 
 			go func() {
-				exporter.extractNetworkThreads(ch)
+				exporter.extractNetworkThreads(context.Background(), ch)
 				close(ch)
 				done <- true
 			}()
@@ -690,7 +690,7 @@ func TestExtractWorkThreads(t *testing.T) {
 			done := make(chan bool)
 
 			go func() {
-				exporter.extractWorkThreads(ch)
+				exporter.extractWorkThreads(context.Background(), ch)
 				close(ch)
 				done <- true
 			}()
@@ -743,7 +743,7 @@ func TestExtractStatistics(t *testing.T) {
 	done := make(chan bool)
 
 	go func() {
-		exporter.extractStatistics(ch)
+		exporter.extractStatistics(context.Background(), ch)
 		close(ch)
 		done <- true
 	}()
@@ -795,7 +795,7 @@ func TestExtractSession(t *testing.T) {
 	done := make(chan bool)
 
 	go func() {
-		exporter.extractSession(ch)
+		exporter.extractSession(context.Background(), ch)
 		close(ch)
 		done <- true
 	}()
@@ -855,7 +855,7 @@ func TestExtractStreamInfo(t *testing.T) {
 	done := make(chan bool)
 
 	go func() {
-		exporter.extractStream(ch)
+		exporter.extractStream(context.Background(), ch)
 		close(ch)
 		done <- true
 	}()
@@ -897,7 +897,7 @@ func TestExtractRtpServer(t *testing.T) {
 	done := make(chan bool)
 
 	go func() {
-		exporter.extractRtp(ch)
+		exporter.extractRtp(context.Background(), ch)
 		close(ch)
 		done <- true
 	}()

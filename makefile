@@ -11,7 +11,7 @@ GIT = git
 # Format
 #
 
-.PHONY: fmt lint lintfix test test-cover test-file
+.PHONY: fmt lint lintfix test test-cover test-file build run
 
 # check code style in these directories
 FMT_DIRS = .
@@ -39,3 +39,9 @@ test_cover:
 
 test_file:
 	$(GO) test -v $(FILE)
+
+build:
+	$(GO) build -ldflags="-s -w" -o zlm_exporter .
+
+run:
+	$(GO) run .
