@@ -391,7 +391,7 @@ func (e *Exporter) extractVersion(ctx context.Context, ch chan<- prometheus.Metr
 		ch <- prometheus.MustNewConstMetric(ZLMediaKitInfo, prometheus.GaugeValue, 1, data.BranchName, data.BuildTime, data.CommitHash)
 		return nil
 	}
-	e.fetchHTTP(context.Background(), ch, ZlmAPIEndpointVersion, processFunc)
+	e.fetchHTTP(ctx, ch, ZlmAPIEndpointVersion, processFunc)
 }
 
 func (e *Exporter) extractAPIStatus(ctx context.Context, ch chan<- prometheus.Metric) {
@@ -409,7 +409,7 @@ func (e *Exporter) extractAPIStatus(ctx context.Context, ch chan<- prometheus.Me
 		}
 		return nil
 	}
-	e.fetchHTTP(context.Background(), ch, ZlmAPIEndpointGetApiList, processFunc)
+	e.fetchHTTP(ctx, ch, ZlmAPIEndpointGetApiList, processFunc)
 }
 
 type APINetworkThreadsObject struct {
@@ -437,7 +437,7 @@ func (e *Exporter) extractNetworkThreads(ctx context.Context, ch chan<- promethe
 		ch <- prometheus.MustNewConstMetric(NetworkThreadsDelayTotal, prometheus.GaugeValue, delayTotal)
 		return nil
 	}
-	e.fetchHTTP(context.Background(), ch, ZlmAPIEndpointGetNetworkThreads, processFunc)
+	e.fetchHTTP(ctx, ch, ZlmAPIEndpointGetNetworkThreads, processFunc)
 }
 
 type APIWorkThreadsObject struct {
@@ -464,7 +464,7 @@ func (e *Exporter) extractWorkThreads(ctx context.Context, ch chan<- prometheus.
 		ch <- prometheus.MustNewConstMetric(WorkThreadsDelayTotal, prometheus.GaugeValue, delayTotal)
 		return nil
 	}
-	e.fetchHTTP(context.Background(), ch, ZlmAPIEndpointGetWorkThreads, processFunc)
+	e.fetchHTTP(ctx, ch, ZlmAPIEndpointGetWorkThreads, processFunc)
 }
 
 type APIStatisticsObject struct {
@@ -511,7 +511,7 @@ func (e *Exporter) extractStatistics(ctx context.Context, ch chan<- prometheus.M
 		ch <- e.mustNewConstMetric(StatisticsUdpSession, prometheus.GaugeValue, data.UdpSession)
 		return nil
 	}
-	e.fetchHTTP(context.Background(), ch, ZlmAPIEndpointGetStatistics, processFunc)
+	e.fetchHTTP(ctx, ch, ZlmAPIEndpointGetStatistics, processFunc)
 }
 
 type APISessionObject struct {
@@ -545,7 +545,7 @@ func (e *Exporter) extractSession(ctx context.Context, ch chan<- prometheus.Metr
 		ch <- prometheus.MustNewConstMetric(SessionTotal, prometheus.GaugeValue, float64(len(apiResponse.Data)))
 		return nil
 	}
-	e.fetchHTTP(context.Background(), ch, ZlmAPIEndpointGetAllSession, processFunc)
+	e.fetchHTTP(ctx, ch, ZlmAPIEndpointGetAllSession, processFunc)
 }
 
 type APIStreamInfoObject struct {
@@ -616,7 +616,7 @@ func (e *Exporter) extractStream(ctx context.Context, ch chan<- prometheus.Metri
 
 		return nil
 	}
-	e.fetchHTTP(context.Background(), ch, ZlmAPIEndpointGetStream, processFunc)
+	e.fetchHTTP(ctx, ch, ZlmAPIEndpointGetStream, processFunc)
 }
 
 type APIRtpServerObject struct {
@@ -640,7 +640,7 @@ func (e *Exporter) extractRtp(ctx context.Context, ch chan<- prometheus.Metric) 
 		ch <- prometheus.MustNewConstMetric(RtpServerTotal, prometheus.GaugeValue, float64(len(apiResponse.Data)))
 		return nil
 	}
-	e.fetchHTTP(context.Background(), ch, ZlmAPIEndpointListRtpServer, processFunc)
+	e.fetchHTTP(ctx, ch, ZlmAPIEndpointListRtpServer, processFunc)
 }
 
 func newLogger(logFormat, logLevel string) *logrus.Logger {
