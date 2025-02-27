@@ -36,8 +36,6 @@ go build
 | `ZLM_EXPORTER_SCRAPE_SECRET`      | Secret for the scrape URI            |        |
 | `ZLM_EXPORTER_WEB_TELEMETRY_ADDRESS`| Address to expose metrics. |  :9101 |
 | `ZLM_EXPORTER_WEB_TELEMETRY_PATH`| Path under which to expose metrics. |  /metrics |
-| `ZLM_EXPORTER_LOG_FORMAT`  | Log format, valid options are txt and json | txt |
-| `ZLM_EXPORTER_LOG_LEVEL`   | Log level, valid options are debug, info, warn, error, fatal, panic | info |
 | `ZLM_EXPORTER_TLS_SKIP_VERIFY` | Skip TLS verification | false |
 
 ## Metrics
@@ -77,10 +75,17 @@ We are happy to receive your feedback and contributions.
 
 ## Thanks
 [ZLMediaKit](https://github.com/ZLMediaKit/ZLMediaKit)
+
 [JetBrains](https://www.jetbrains.com/)
+
 [redis_exporter](https://github.com/oliver006/redis_exporter)
+
 [haproxy_exporter](https://github.com/prometheus/haproxy_exporter)
+
 [Prometheus](https://prometheus.io/)
+
 [Cursor](https://www.cursor.com/)
 
 JetBrains/Cursor provides great IDE for coding.
+
+Most unittest powered by Cursor.
