@@ -643,25 +643,6 @@ func (e *Exporter) extractRtp(ctx context.Context, ch chan<- prometheus.Metric) 
 	e.fetchHTTP(ctx, ch, ZlmAPIEndpointListRtpServer, processFunc)
 }
 
-func newLogger(logFormat, logLevel string) *logrus.Logger {
-	log := logrus.New()
-
-	switch logFormat {
-	case "json":
-		log.SetFormatter(&logrus.JSONFormatter{})
-	default:
-		log.SetFormatter(&logrus.TextFormatter{})
-	}
-
-	level, err := logrus.ParseLevel(logLevel)
-	if err != nil {
-		log.Fatal(err)
-	}
-	log.SetLevel(level)
-
-	return log
-}
-
 var (
 	webFlagConfig = webflag.AddFlags(kingpin.CommandLine, ":9101")
 	webTimeout    = kingpin.Flag("web.timeout", "Timeout for HTTP requests").
