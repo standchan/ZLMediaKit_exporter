@@ -645,22 +645,22 @@ func (e *Exporter) extractRtp(ctx context.Context, ch chan<- prometheus.Metric) 
 
 var (
 	webFlagConfig = webflag.AddFlags(kingpin.CommandLine, ":9101")
-	webTimeout    = kingpin.Flag("web.timeout", "Timeout for HTTP requests,default is 8s,").
-			Default(getEnv("ZLM_EXPORTER_TIMEOUT", "8s")).Duration()
-	webSSLVerify = kingpin.Flag("web.ssl-verify", "SSL verify").
+	webTimeout    = kingpin.Flag("web.timeout", "Timeout for connection to ZlMediaKit instance (default 15s)").
+			Default(getEnv("ZLM_EXPORTER_TIMEOUT", "15s")).Duration()
+	webSSLVerify = kingpin.Flag("web.ssl-verify", "Enable SSL verification(default false)").
 			Default(getEnv("ZLM_EXPORTER_SSL_VERIFY", "false")).Bool()
 
-	zlmApiURL = kingpin.Flag("zlm.scrape-url",
-		"URI on which to scrape zlmediakit metrics(ZlMediaKit apiServer url).").
+	zlmApiURL = kingpin.Flag("zlm.api-url",
+		"URI on which to scrape ZlMediaKit metrics(ZlMediaKit apiServer url).").
 		Default(getEnv("ZLM_API_URL", "http://localhost")).String()
-	zlmApiSecret = kingpin.Flag("zlm.secret", "Secret for the access zlmediakit api").
-			Default(getEnv("ZLM_API_SECRET", "")).String()
+	zlmApiSecret = kingpin.Flag("zlm.secret", "Secret for the access ZlMediaKit api(from ZLM_API_SECRET env or CLI flag)").
+			PlaceHolder("<secret>").String()
 
 	exporterMetricPath = kingpin.Flag("exporter.metric-path",
-		"Path under which to expose metrics.").
+		"Path under which to expose metrics(default /metrics).").
 		Default(getEnv("ZLM_EXPORTER_WEB_TELEMETRY_PATH", "/metrics")).String()
 	exporterMetricOnly = kingpin.Flag("exporter.metric-only",
-		"Only export metrics, not other key-value metrics").
+		"Only export metrics, not other key-value metrics(default true).").
 		Default(getEnv("ZLM_EXPORTER_METRIC_ONLY", "true")).Bool()
 )
 
@@ -671,6 +671,10 @@ func main() {
 	kingpin.HelpFlag.Short('h')
 	kingpin.Parse()
 
+	if *zlmApiSecret == "" {
+		*zlmApiSecret = getEnv("ZLM_API_SECRET", "")
+	}
+
 	log := logrus.New()
 	log.Printf("ZLMediaKit Metrics Exporter %s    build date: %s    sha1: %s    Go: %s    GOOS: %s    GOARCH: %s",
 		BuildVersion, BuildDate, BuildCommitSha,
@@ -679,7 +683,6 @@ func main() {
 		runtime.GOARCH,
 	)
 
-	// 打印配置信息
 	log.Printf("Configuration:")
 	log.Printf("  Web Timeout: %v", *webTimeout)
 	log.Printf("  Web SSL Verify: %v", *webSSLVerify)
@@ -708,10 +711,10 @@ func main() {
 	svr := &http.Server{}
 
 	go func() {
+		log.Infoln("zlm_exporter started successfully, metrics available at", *exporterMetricPath)
 		if err := promweb.ListenAndServe(svr, webFlagConfig, promlog.New(&promlog.Config{})); err != nil {
 			log.Fatalln("msg", "Error starting HTTP server", "err", err)
 		}
-		log.Infoln("zlm_exporter started successfully")
 	}()
 
 	quit := make(chan os.Signal, 1)
