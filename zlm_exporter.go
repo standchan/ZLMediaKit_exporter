@@ -171,11 +171,11 @@ type BuildInfo struct {
 
 func NewExporter(uri string, secret string, logger *logrus.Logger, options Options) (*Exporter, error) {
 	if uri == "" {
-		return nil, fmt.Errorf("zlMediaKit uri is required")
+		return nil, fmt.Errorf("ZlMediaKit API uri is required")
 	}
 
 	if secret == "" {
-		return nil, fmt.Errorf("zlMediaKit secret is required")
+		return nil, fmt.Errorf("ZlMediaKit API secret is required")
 	}
 
 	client := http.Client{
@@ -645,8 +645,8 @@ func (e *Exporter) extractRtp(ctx context.Context, ch chan<- prometheus.Metric) 
 
 var (
 	webFlagConfig = webflag.AddFlags(kingpin.CommandLine, ":9101")
-	webTimeout    = kingpin.Flag("web.timeout", "Timeout for HTTP requests").
-			Default(getEnv("ZLM_EXPORTER_TIMEOUT", "10s")).Duration()
+	webTimeout    = kingpin.Flag("web.timeout", "Timeout for HTTP requests,default is 8s,").
+			Default(getEnv("ZLM_EXPORTER_TIMEOUT", "8s")).Duration()
 	webSSLVerify = kingpin.Flag("web.ssl-verify", "SSL verify").
 			Default(getEnv("ZLM_EXPORTER_SSL_VERIFY", "false")).Bool()
 
@@ -678,6 +678,15 @@ func main() {
 		runtime.GOOS,
 		runtime.GOARCH,
 	)
+
+	// 打印配置信息
+	log.Printf("Configuration:")
+	log.Printf("  Web Timeout: %v", *webTimeout)
+	log.Printf("  Web SSL Verify: %v", *webSSLVerify)
+	log.Printf("  ZlMediaKit API URL: %s", *zlmApiURL)
+	log.Printf("  ZlMediaKit API Secret: %s", maskSecret(*zlmApiSecret))
+	log.Printf("  Exporter Metrics Path: %s", *zlmExporterMetricPath)
+	log.Printf("  Exporter Metrics Only: %v", *zlmExporterMetricOnly)
 
 	option := Options{
 		Timeout:   *webTimeout,
@@ -726,4 +735,14 @@ func main() {
 	}()
 
 	<-done
+}
+
+func maskSecret(secret string) string {
+	if len(secret) == 0 {
+		return "<empty>"
+	}
+	if len(secret) <= 4 {
+		return "****"
+	}
+	return secret[:2] + "****" + secret[len(secret)-2:]
 }

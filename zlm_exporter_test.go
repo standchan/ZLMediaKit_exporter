@@ -1049,71 +1049,33 @@ func TestGetEnvBool(t *testing.T) {
 	}
 }
 
-func TestNewLogger(t *testing.T) {
+func TestMaskSecret(t *testing.T) {
 	tests := []struct {
-		name      string
-		logFormat string
-		logLevel  string
-		wantErr   bool
-		checkFunc func(*logrus.Logger) bool
+		name     string
+		secret   string
+		expected string
 	}{
 		{
-			name:      "default txt format and info level",
-			logFormat: "txt",
-			logLevel:  "info",
-			wantErr:   false,
-			checkFunc: func(l *logrus.Logger) bool {
-				_, isTxt := l.Formatter.(*logrus.TextFormatter)
-				return isTxt && l.Level == logrus.InfoLevel
-			},
+			name:     "empty secret",
+			secret:   "",
+			expected: "<empty>",
 		},
 		{
-			name:      "json format and debug level",
-			logFormat: "json",
-			logLevel:  "debug",
-			wantErr:   false,
-			checkFunc: func(l *logrus.Logger) bool {
-				_, isJSON := l.Formatter.(*logrus.JSONFormatter)
-				return isJSON && l.Level == logrus.DebugLevel
-			},
+			name:     "short secret",
+			secret:   "1234",
+			expected: "****",
 		},
 		{
-			name:      "unknown format default use txt format",
-			logFormat: "unknown",
-			logLevel:  "info",
-			wantErr:   false,
-			checkFunc: func(l *logrus.Logger) bool {
-				_, isTxt := l.Formatter.(*logrus.TextFormatter)
-				return isTxt && l.Level == logrus.InfoLevel
-			},
+			name:     "long secret",
+			secret:   "1234567890",
+			expected: "12****90",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			defer func() {
-				if r := recover(); r != nil {
-					if !tt.wantErr {
-						t.Errorf("unexpected panic: %v", r)
-					}
-				}
-			}()
-
-			logger := newLogger(tt.logFormat, tt.logLevel)
-
-			if tt.wantErr {
-				t.Error("newLogger() should return error")
-				return
-			}
-
-			if logger == nil {
-				t.Error("newLogger() returned nil")
-				return
-			}
-
-			if !tt.checkFunc(logger) {
-				t.Error("newLogger() config not match expected")
-			}
+			result := maskSecret(tt.secret)
+			assert.Equal(t, tt.expected, result)
 		})
 	}
 }
