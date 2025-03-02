@@ -645,15 +645,15 @@ func (e *Exporter) extractRtp(ctx context.Context, ch chan<- prometheus.Metric) 
 
 var (
 	webFlagConfig = webflag.AddFlags(kingpin.CommandLine, ":9101")
-	webTimeout    = kingpin.Flag("web.timeout", "Timeout for connection to ZlMediaKit instance (default 15s)").
+	webTimeout    = kingpin.Flag("web.timeout", "Timeout for connection to ZlMediaKit instance (default 15s).").
 			Default(getEnv("ZLM_EXPORTER_TIMEOUT", "15s")).Duration()
-	webSSLVerify = kingpin.Flag("web.ssl-verify", "Enable SSL verification(default false)").
-			Default(getEnv("ZLM_EXPORTER_SSL_VERIFY", "false")).Bool()
+	webSSLVerify = kingpin.Flag("web.ssl-verify", "Enable SSL verification(default true).").
+			Default(getEnv("ZLM_EXPORTER_SSL_VERIFY", "true")).Bool()
 
 	zlmApiURL = kingpin.Flag("zlm.api-url",
 		"URI on which to scrape ZlMediaKit metrics(ZlMediaKit apiServer url).").
 		Default(getEnv("ZLM_API_URL", "http://localhost")).String()
-	zlmApiSecret = kingpin.Flag("zlm.secret", "Secret for the access ZlMediaKit api(from ZLM_API_SECRET env or CLI flag)").
+	zlmApiSecret = kingpin.Flag("zlm.secret", "Secret for the access ZlMediaKit api(from ZLM_API_SECRET env or CLI flag).").
 			PlaceHolder("<secret>").String()
 
 	exporterMetricPath = kingpin.Flag("exporter.metric-path",
