@@ -643,6 +643,16 @@ func (e *Exporter) extractRtp(ctx context.Context, ch chan<- prometheus.Metric) 
 	e.fetchHTTP(ctx, ch, ZlmAPIEndpointListRtpServer, processFunc)
 }
 
+func maskSecret(secret string) string {
+	if len(secret) == 0 {
+		return "<empty>"
+	}
+	if len(secret) <= 4 {
+		return "****"
+	}
+	return secret[:2] + "****" + secret[len(secret)-2:]
+}
+
 var (
 	webFlagConfig = webflag.AddFlags(kingpin.CommandLine, ":9101")
 	webTimeout    = kingpin.Flag("web.timeout", "Timeout for connection to ZlMediaKit instance (default 15s).").
@@ -738,14 +748,4 @@ func main() {
 	}()
 
 	<-done
-}
-
-func maskSecret(secret string) string {
-	if len(secret) == 0 {
-		return "<empty>"
-	}
-	if len(secret) <= 4 {
-		return "****"
-	}
-	return secret[:2] + "****" + secret[len(secret)-2:]
 }
