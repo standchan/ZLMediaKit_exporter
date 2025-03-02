@@ -656,10 +656,10 @@ var (
 	zlmApiSecret = kingpin.Flag("zlm.secret", "Secret for the access zlmediakit api").
 			Default(getEnv("ZLM_API_SECRET", "")).String()
 
-	zlmExporterMetricPath = kingpin.Flag("exporter.metric-path",
+	exporterMetricPath = kingpin.Flag("exporter.metric-path",
 		"Path under which to expose metrics.").
 		Default(getEnv("ZLM_EXPORTER_WEB_TELEMETRY_PATH", "/metrics")).String()
-	zlmExporterMetricOnly = kingpin.Flag("exporter.metric-only",
+	exporterMetricOnly = kingpin.Flag("exporter.metric-only",
 		"Only export metrics, not other key-value metrics").
 		Default(getEnv("ZLM_EXPORTER_METRIC_ONLY", "true")).Bool()
 )
@@ -685,8 +685,8 @@ func main() {
 	log.Printf("  Web SSL Verify: %v", *webSSLVerify)
 	log.Printf("  ZlMediaKit API URL: %s", *zlmApiURL)
 	log.Printf("  ZlMediaKit API Secret: %s", maskSecret(*zlmApiSecret))
-	log.Printf("  Exporter Metrics Path: %s", *zlmExporterMetricPath)
-	log.Printf("  Exporter Metrics Only: %v", *zlmExporterMetricOnly)
+	log.Printf("  Exporter Metrics Path: %s", *exporterMetricPath)
+	log.Printf("  Exporter Metrics Only: %v", *exporterMetricOnly)
 
 	option := Options{
 		Timeout:   *webTimeout,
@@ -699,12 +699,12 @@ func main() {
 	}
 
 	registry := prometheus.NewRegistry()
-	if !*zlmExporterMetricOnly {
+	if !*exporterMetricOnly {
 		registry = prometheus.DefaultRegisterer.(*prometheus.Registry)
 	}
 	registry.MustRegister(exporter)
 
-	http.Handle(*zlmExporterMetricPath, promhttp.HandlerFor(registry, promhttp.HandlerOpts{}))
+	http.Handle(*exporterMetricPath, promhttp.HandlerFor(registry, promhttp.HandlerOpts{}))
 	svr := &http.Server{}
 
 	go func() {
