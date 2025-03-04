@@ -66,6 +66,17 @@ make build
 | `zlm_statistics_tcp_session`              | {}                                | Statistics TcpSession            |
 | `zlm_statistics_udp_server`               | {}                                | Statistics UdpServer             |
 | `zlm_statistics_udp_session`              | {}                                | Statistics UdpSession            |
+| `zlm_session_info`                        | id、identifier、local_ip、local_port、peer_ip、peer_port、typeid | Session info                     |
+| `zlm_session_total`                       | {}                                | Total number of sessions         |
+| `zlm_stream_info`                         | vhost、app、stream、schema、origin_type、origin_url | Stream basic information         |
+| `zlm_stream_status`                       | vhost、app、stream、schema         | Stream status (1: active with data flowing, 0: inactive) |
+| `zlm_stream_reader_count`                | vhost、app、stream、schema         | Stream reader count              |
+| `zlm_stream_total_reader_count`          | vhost、app、stream         | Total reader count across all schemas |
+| `zlm_stream_bandwidths`                  | vhost、app、stream、schema、originType         | Stream bandwidth                  |
+| `zlm_stream_total`                       | {}                                | Total number of streams         |
+| `zlm_rtp_server_info`                    | port、stream_id         | RTP server info                  |
+| `zlm_rtp_server_total`                   | {}                                | Total number of RTP servers         |
+
 
 ## Contributing and reporting issues
 
