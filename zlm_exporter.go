@@ -13,6 +13,7 @@ import (
 	"runtime"
 	"strconv"
 	"sync"
+	"time"
 
 	"context"
 
@@ -244,8 +245,10 @@ func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 func (e *Exporter) scrape(ch chan<- prometheus.Metric) (up float64) {
 	e.totalScrapes.Inc()
 
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+
 	var wg sync.WaitGroup
-	ctx := context.Background()
 
 	wg.Add(8)
 	go func() {
@@ -281,8 +284,19 @@ func (e *Exporter) scrape(ch chan<- prometheus.Metric) (up float64) {
 		e.extractRtp(ctx, ch)
 	}()
 
-	wg.Wait()
-	return 1
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-ctx.Done():
+		e.log.Error("scrape timeout", "error", ctx.Err())
+		return 0
+	case <-done:
+		return 1
+	}
 }
 
 type ZLMAPIResponseData interface {
