@@ -717,15 +717,14 @@ func main() {
 		registry = prometheus.DefaultRegisterer.(*prometheus.Registry)
 	}
 	registry.MustRegister(exporter)
-
-	http.Handle(*metricsPath, promhttp.HandlerFor(registry, promhttp.HandlerOpts{}))
+	http.Handle(*metricsPath, promhttp.HandlerFor(registry, promhttp.HandlerOpts{
+		Timeout: *webTimeout,
+	}))
 	svr := &http.Server{}
 
-	go func() {
-		logger.Info("zlm_exporter started successfully, metrics available at", "metrics_path", *metricsPath)
-		if err := promweb.ListenAndServe(svr, webFlagConfig, logger); err != nil {
-			logger.Error("Error starting HTTP server", "error", err)
-			os.Exit(1)
-		}
-	}()
+	logger.Info("zlm_exporter started successfully, metrics available at", "metrics_path", *metricsPath)
+	if err := promweb.ListenAndServe(svr, webFlagConfig, logger); err != nil {
+		logger.Error("Error starting HTTP server", "error", err)
+		os.Exit(1)
+	}
 }

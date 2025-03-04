@@ -32,11 +32,11 @@ go build
 
 |  Name                      | Description                               | default  |
 |-------------------------   |-------------------------------------------|----------|
-| `ZLM_EXPORTER_SCRAPE_URI`  | URI on which to scrape zlmediakit metrics(ZlMediaKit apiServer url).       |  http://localhost  |
-| `ZLM_EXPORTER_SCRAPE_SECRET`      | Secret for the scrape URI            |        |
+| `ZLM_API_URI`  | URI on which to scrape zlmediakit metrics(ZlMediaKit apiServer url).       |  http://localhost  |
+| `ZLM_API_SECRET`      | Secret for the scrape URI            |        |
 | `ZLM_EXPORTER_WEB_TELEMETRY_ADDRESS`| Address to expose metrics. |  :9101 |
 | `ZLM_EXPORTER_WEB_TELEMETRY_PATH`| Path under which to expose metrics. |  /metrics |
-| `ZLM_EXPORTER_TLS_SKIP_VERIFY` | Skip TLS verification | false |
+| `ZLM_EXPORTER_SSL_VERIFY` | Skip TLS verification | false |
 
 ## Metrics
 
