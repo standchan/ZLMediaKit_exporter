@@ -24,7 +24,8 @@ docker run -d --name zlm_exporter -p 9101:9101 zlm_exporter:latest
 ```shell
 git clone https://github.com/standchan/zlm_exporter
 cd zlm_exporter
-go build
+make build
+./zlm_exporter
 ```
 
 ## Environment Variables
