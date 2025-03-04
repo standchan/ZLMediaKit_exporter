@@ -5,15 +5,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"os"
-	"os/signal"
 	"reflect"
 	"runtime"
 	"strconv"
 	"sync"
-	"syscall"
 	"time"
 
 	"context"
@@ -21,11 +20,10 @@ import (
 	"github.com/alecthomas/kingpin/v2"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/prometheus/common/promlog"
+	"github.com/prometheus/common/promslog"
 	"github.com/prometheus/common/version"
 	promweb "github.com/prometheus/exporter-toolkit/web"
 	webflag "github.com/prometheus/exporter-toolkit/web/kingpinflag"
-	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -152,7 +150,7 @@ type Exporter struct {
 	up                prometheus.Gauge
 	totalScrapes      prometheus.Counter
 	totalScrapeErrors prometheus.CounterVec
-	log               *logrus.Logger
+	log               *slog.Logger
 	options           Options
 
 	buildInfo BuildInfo
@@ -169,7 +167,7 @@ type BuildInfo struct {
 	Date      string
 }
 
-func NewExporter(uri string, secret string, logger *logrus.Logger, options Options) (*Exporter, error) {
+func NewExporter(uri string, secret string, logger *slog.Logger, options Options) (*Exporter, error) {
 	if uri == "" {
 		return nil, fmt.Errorf("ZlMediaKit API uri is required")
 	}
@@ -349,7 +347,7 @@ func (e *Exporter) fetchHTTP(ctx context.Context, ch chan<- prometheus.Metric, e
 	parsedURL, err := url.Parse(uri)
 	if err != nil {
 		scrapeErrors.WithLabelValues(endpoint).Inc()
-		e.log.Println("msg", "error parsing URL", "err", err)
+		e.log.Error("error parsing URL", "err", err)
 		return
 	}
 
@@ -364,14 +362,14 @@ func (e *Exporter) fetchHTTP(ctx context.Context, ch chan<- prometheus.Metric, e
 	res, err := e.client.Do(req)
 	if err != nil {
 		scrapeErrors.WithLabelValues(endpoint).Inc()
-		e.log.Println("msg", "error scraping ZLMediaKit", "err", err)
+		e.log.Error("error scraping ZLMediaKit", "err", err)
 		return
 	}
 	defer res.Body.Close()
 
 	if err = processFunc(res.Body); err != nil {
 		scrapeErrors.WithLabelValues(endpoint).Inc()
-		e.log.Println("msg", "error processing response", "err", err)
+		e.log.Error("error processing response", "err", err)
 	}
 }
 
@@ -660,18 +658,18 @@ var (
 	webSSLVerify = kingpin.Flag("web.ssl-verify", "Enable SSL verification(default true).").
 			Default(getEnv("ZLM_EXPORTER_SSL_VERIFY", "true")).Bool()
 
+	metricsPath = kingpin.Flag("web.telemetry-path",
+		"Path under which to expose metrics (default /metrics)").
+		Default(getEnv("ZLM_EXPORTER_TELEMETRY_PATH", "/metrics")).String()
+	metricOnly = kingpin.Flag("web.metric-only",
+		"Only export metrics, not other key-value metrics(default true).").
+		Default(getEnv("ZLM_EXPORTER_METRIC_ONLY", "true")).Bool()
+
 	zlmApiURL = kingpin.Flag("zlm.api-url",
 		"URI on which to scrape ZlMediaKit metrics(ZlMediaKit apiServer url).").
 		Default(getEnv("ZLM_API_URL", "http://localhost")).String()
 	zlmApiSecret = kingpin.Flag("zlm.secret", "Secret for the access ZlMediaKit api(from ZLM_API_SECRET env or CLI flag).").
 			PlaceHolder("<secret>").String()
-
-	exporterMetricPath = kingpin.Flag("exporter.metric-path",
-		"Path under which to expose metrics(default /metrics).").
-		Default(getEnv("ZLM_EXPORTER_WEB_TELEMETRY_PATH", "/metrics")).String()
-	exporterMetricOnly = kingpin.Flag("exporter.metric-only",
-		"Only export metrics, not other key-value metrics(default true).").
-		Default(getEnv("ZLM_EXPORTER_METRIC_ONLY", "true")).Bool()
 )
 
 // doc: https://prometheus.io/docs/instrumenting/writing_exporters/
@@ -680,72 +678,54 @@ func main() {
 	kingpin.Version(version.Print("zlm_exporter"))
 	kingpin.HelpFlag.Short('h')
 	kingpin.Parse()
+	promslogConfig := &promslog.Config{}
+	logger := promslog.New(promslogConfig)
 
 	if *zlmApiSecret == "" {
 		*zlmApiSecret = getEnv("ZLM_API_SECRET", "")
 	}
 
-	log := logrus.New()
-	log.Printf("ZLMediaKit Metrics Exporter %s    build date: %s    sha1: %s    Go: %s    GOOS: %s    GOARCH: %s",
+	logger.Info("ZLMediaKit Metrics Exporter %s    build date: %s    sha1: %s    Go: %s    GOOS: %s    GOARCH: %s",
 		BuildVersion, BuildDate, BuildCommitSha,
 		runtime.Version(),
 		runtime.GOOS,
 		runtime.GOARCH,
 	)
 
-	log.Printf("Configuration:")
-	log.Printf("  Web Timeout: %v", *webTimeout)
-	log.Printf("  Web SSL Verify: %v", *webSSLVerify)
-	log.Printf("  ZlMediaKit API URL: %s", *zlmApiURL)
-	log.Printf("  ZlMediaKit API Secret: %s", maskSecret(*zlmApiSecret))
-	log.Printf("  Exporter Metrics Path: %s", *exporterMetricPath)
-	log.Printf("  Exporter Metrics Only: %v", *exporterMetricOnly)
+	logger.Info("Configuration")
+	logger.Info("web configuration",
+		"timeout", *webTimeout,
+		"ssl_verify", *webSSLVerify,
+		"zlm_api_url", *zlmApiURL,
+		"zlm_api_secret", maskSecret(*zlmApiSecret),
+		"metrics_path", *metricsPath,
+		"metrics_only", *metricOnly)
 
 	option := Options{
 		Timeout:   *webTimeout,
 		SSLVerify: *webSSLVerify,
 	}
 
-	exporter, err := NewExporter(*zlmApiURL, *zlmApiSecret, log, option)
+	exporter, err := NewExporter(*zlmApiURL, *zlmApiSecret, logger, option)
 	if err != nil {
-		log.Panic("Error NewExporter failed:", err)
+		logger.Error("failed to create new exporter", "error", err)
+		os.Exit(1)
 	}
 
 	registry := prometheus.NewRegistry()
-	if !*exporterMetricOnly {
+	if !*metricOnly {
 		registry = prometheus.DefaultRegisterer.(*prometheus.Registry)
 	}
 	registry.MustRegister(exporter)
 
-	http.Handle(*exporterMetricPath, promhttp.HandlerFor(registry, promhttp.HandlerOpts{}))
+	http.Handle(*metricsPath, promhttp.HandlerFor(registry, promhttp.HandlerOpts{}))
 	svr := &http.Server{}
 
 	go func() {
-		log.Infoln("zlm_exporter started successfully, metrics available at", *exporterMetricPath)
-		if err := promweb.ListenAndServe(svr, webFlagConfig, promlog.New(&promlog.Config{})); err != nil {
-			log.Fatalln("msg", "Error starting HTTP server", "err", err)
+		logger.Info("zlm_exporter started successfully, metrics available at", "metrics_path", *metricsPath)
+		if err := promweb.ListenAndServe(svr, webFlagConfig, logger); err != nil {
+			logger.Error("Error starting HTTP server", "error", err)
+			os.Exit(1)
 		}
 	}()
-
-	quit := make(chan os.Signal, 1)
-	done := make(chan bool, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-
-	go func() {
-		sig := <-quit
-		log.Infof("received %s signal, shutting down gracefully...", sig.String())
-
-		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-		defer cancel()
-
-		if err := svr.Shutdown(ctx); err != nil {
-			log.Errorf("zlm_exporter shutdown error: %v", err)
-		} else {
-			log.Infoln("zlm_exporter shutdown gracefully")
-		}
-
-		close(done)
-	}()
-
-	<-done
 }
