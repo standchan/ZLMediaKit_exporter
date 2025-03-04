@@ -249,7 +249,6 @@ func TestFetchHTTPErrorHandling(t *testing.T) {
 			defer server.Close()
 
 			options := Options{
-				Timeout:   1 * time.Second,
 				SSLVerify: true,
 			}
 			exporter, err := NewExporter(server.URL, MockZlmAPIServerSecret, promslog.New(&promslog.Config{}), options)

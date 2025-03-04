@@ -13,7 +13,6 @@ import (
 	"runtime"
 	"strconv"
 	"sync"
-	"time"
 
 	"context"
 
@@ -158,7 +157,6 @@ type Exporter struct {
 
 type Options struct {
 	SSLVerify bool
-	Timeout   time.Duration
 }
 
 type BuildInfo struct {
@@ -176,9 +174,7 @@ func NewExporter(uri string, secret string, logger *slog.Logger, options Options
 		return nil, fmt.Errorf("ZlMediaKit API secret is required")
 	}
 
-	client := http.Client{
-		Timeout: options.Timeout,
-	}
+	client := http.Client{}
 
 	if options.SSLVerify {
 		client.Transport = &http.Transport{
@@ -249,8 +245,7 @@ func (e *Exporter) scrape(ch chan<- prometheus.Metric) (up float64) {
 	e.totalScrapes.Inc()
 
 	var wg sync.WaitGroup
-	ctx, cancel := context.WithTimeout(context.Background(), e.options.Timeout)
-	defer cancel()
+	ctx := context.Background()
 
 	wg.Add(8)
 	go func() {
@@ -702,7 +697,6 @@ func main() {
 		"metrics_only", *metricOnly)
 
 	option := Options{
-		Timeout:   *webTimeout,
 		SSLVerify: *webSSLVerify,
 	}
 
