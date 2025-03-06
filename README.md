@@ -242,11 +242,9 @@ zlm_work_threads_total 8
 
 - [ ] GA
 - [ ] Add disable exporting key-value metrics
-- [ ] Add grafana dashboard example
-- [ ] Add prometheus alert example
+- [ ] Add grafana dashboard / prometheus alert example
 - [ ] Add git action CI/CD,and trigger docker build and push to docker hub
 - [ ] Add more tests
-- [ ] Add more metrics
 
 ## Contributing and reporting issues
 
