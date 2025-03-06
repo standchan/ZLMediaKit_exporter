@@ -676,7 +676,7 @@ var (
 
 	zlmApiURL = kingpin.Flag("zlm.api-url",
 		"URI on which to scrape ZlMediaKit metrics(ZlMediaKit apiServer url).").
-		Default(getEnv("ZLM_API_URL", "http://localhost")).String()
+		Default(getEnv("ZLM_API_URL", "http://127.0.0.1")).String()
 	zlmApiSecret = kingpin.Flag("zlm.secret", "Secret for the access ZlMediaKit api(from ZLM_API_SECRET env or CLI flag).").
 			PlaceHolder("<secret>").String()
 )

@@ -5,13 +5,13 @@
 GO = go
 GOFMT = gofmt
 GOCI = golangci-lint
-GIT = git
-
+ZLMEXPORTER_IMAGE = zlm_exporter
+IMAGE_TAG = latest
 #
 # Format
 #
 
-.PHONY: fmt lint lintfix test test-cover test-file build run
+.PHONY: fmt lint lintfix test test-cover test-file build build-image run
 
 # check code style in these directories
 FMT_DIRS = .
@@ -42,6 +42,9 @@ test_file:
 
 build:
 	$(GO) build -ldflags="-s -w" -o zlm_exporter .
+
+build-image:
+	docker build -t $(ZLMEXPORTER_IMAGE):$(IMAGE_TAG) .
 
 run:
 	$(GO) run .

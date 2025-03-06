@@ -1,5 +1,5 @@
 # pre-build
-FROM golang:1.21-alpine AS builder
+FROM golang:1.22-alpine AS builder
 
 WORKDIR /app
 COPY . /app
@@ -14,4 +14,4 @@ COPY --from=builder /app/zlm_exporter .
 
 EXPOSE 9101
 
-ENTRYPOINT ["/zlm_exporter"]
+ENTRYPOINT ["/app/zlm_exporter"]
