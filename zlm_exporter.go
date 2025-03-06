@@ -42,7 +42,7 @@ const (
 )
 
 const (
-	Namespace               = "zlmediakit"
+	Namespace               = "zlm"
 	SubsystemVersion        = "version"
 	SubsystemApi            = "api"
 	SubsystemNetworkThreads = "network_threads"
@@ -584,7 +584,7 @@ func (e *Exporter) extractStream(ctx context.Context, ch chan<- prometheus.Metri
 		processedStreams := make(map[string]bool)
 		for _, stream := range apiResponse.Data {
 			// stream total reader count
-			streamKey := fmt.Sprintf("%s_%s_%s_%s", stream.Vhost, stream.App, stream.Stream, stream.Schema)
+			streamKey := fmt.Sprintf("%s_%s_%s", stream.Vhost, stream.App, stream.Stream)
 
 			if !processedStreams[streamKey] {
 				ch <- prometheus.MustNewConstMetric(StreamTotalReaderCount,
