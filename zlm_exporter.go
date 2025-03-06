@@ -661,7 +661,7 @@ func maskSecret(secret string) string {
 }
 
 var (
-	webFlagConfig = webflag.AddFlags(kingpin.CommandLine, ":9101")
+	webFlagConfig = webflag.AddFlags(kingpin.CommandLine, getEnv("ZLM_EXPORTER_TELEMETRY_ADDRESS", ":9101"))
 	webTimeout    = kingpin.Flag("web.timeout", "Timeout for connection to ZlMediaKit instance (default 15s).").
 			Default(getEnv("ZLM_EXPORTER_TIMEOUT", "15s")).Duration()
 	webSSLVerify = kingpin.Flag("web.ssl-verify", "Enable SSL verification(default true).").

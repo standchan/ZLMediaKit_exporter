@@ -10,31 +10,23 @@ Prometheus exporter for [ZLMediaKit](https://github.com/ZLMediaKit/ZLMediaKit) m
 
 ## Installation
 
-### Docker
-```shell
-make build-image
-# Run
-docker run --name zlm_exporter -p 9101:9101 -e ZLM_API_URI=<zlmediakit_api_uri> -e ZLM_API_SECRET=<zlmediakit_api_secret> zlm_exporter:latest
-
-```
 ### Source
 ```shell
 git clone https://github.com/standchan/zlm_exporter
 cd zlm_exporter
 make build
-./zlm_exporter
+./zlm_exporter --zlm.api-url=<zlmediakit_api_uri> --zlm.secret=<zlmediakit_api_secret>
 ```
 
-## Environment Variables
+## Command line flags
 
-
-|  Name                      | Description                               | default  |
+|  Name                      | Environment Variable Name                               | Description  |
 |-------------------------   |-------------------------------------------|----------|
-| `ZLM_API_URI`  | URI on which to scrape zlmediakit metrics(ZlMediaKit apiServer url).       |  http://localhost  |
-| `ZLM_API_SECRET`      | Secret for the scrape URI            |        |
-| `ZLM_EXPORTER_WEB_TELEMETRY_ADDRESS`| Address to expose metrics. |  :9101 |
-| `ZLM_EXPORTER_WEB_TELEMETRY_PATH`| Path under which to expose metrics. |  /metrics |
-| `ZLM_EXPORTER_SSL_VERIFY` | Skip TLS verification | false |
+| `zlm.api-url`  |  ZLM_API_URL      |  URI on which to scrape zlmediakit metrics(ZlMediaKit apiServer url) default: http://localhost  |
+| `zlm.secret`      | ZLM_API_SECRET            | Secret for the scrape URI            |
+| `web.listen-address`| ZLM_EXPORTER_TELEMETRY_ADDRESS | Address to expose metrics. default: :9101 |
+| `web.telemetry-path`| ZLM_EXPORTER_TELEMETRY_PATH| Path under which to expose metrics. default: /metrics |
+| `web.ssl-verify` | ZLM_EXPORTER_SSL_VERIFY | Skip TLS verification. default: true |
 
 ## Metrics
 
