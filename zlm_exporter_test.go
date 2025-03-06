@@ -28,7 +28,7 @@ var (
 	MockZlmAPIServerHandler = gin.Default()
 )
 
-var MetricsCount = 99
+var MetricsCount = 96
 
 func setup() {
 	setupZlmApiServer()
