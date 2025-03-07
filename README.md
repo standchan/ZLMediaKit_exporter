@@ -9,7 +9,7 @@ Prometheus exporter for [ZLMediaKit](https://github.com/ZLMediaKit/ZLMediaKit) m
 [![](https://img.shields.io/badge/PRs-welcome-yellow.svg)](https://github.com/standchan/zlm_exporter/pulls)
 
 ## NOTE
-⚠️ Not production-ready. Please thoroughly test before deploying to production environments.
+⚠️ Warning: Not production-ready. Please thoroughly test before deploying to production environments.
 
 
 ## Usage
