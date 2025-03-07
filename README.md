@@ -250,7 +250,7 @@ zlm_work_threads_total 8
 
 JUST DO IT! 
 
-We are happy to receive your feedback and contributions.
+We appreciate your feedback and contributions!
 
 
 ## Thanks
