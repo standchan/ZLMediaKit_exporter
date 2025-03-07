@@ -1,0 +1,209 @@
+{
+  "code": 0,
+  "data": [
+    {
+      "aliveSecond": 7,
+      "app": "live",
+      "bytesSpeed": 28624,
+      "createStamp": 1731424913,
+      "isRecordingHLS": true,
+      "isRecordingMP4": false,
+      "originSock": {
+        "identifier": "178-77",
+        "local_ip": "127.0.0.1",
+        "local_port": 554,
+        "peer_ip": "127.0.0.1",
+        "peer_port": 55417
+      },
+      "originType": 2,
+      "originTypeStr": "rtsp_push",
+      "originUrl": "rtsp://127.0.0.1:554/live/test",
+      "params": "",
+      "readerCount": 0,
+      "schema": "ts",
+      "stream": "test",
+      "totalReaderCount": 0,
+      "tracks": [
+        {
+          "channels": 1,
+          "codec_id": 2,
+          "codec_id_name": "mpeg4-generic",
+          "codec_type": 1,
+          "duration": 3570,
+          "frames": 187,
+          "ready": true,
+          "sample_bit": 16,
+          "sample_rate": 44100
+        },
+        {
+          "codec_id": 0,
+          "codec_id_name": "H264",
+          "codec_type": 0,
+          "duration": 5597,
+          "fps": 26.0,
+          "frames": 149,
+          "gop_interval_ms": 801,
+          "gop_size": 21,
+          "height": 960,
+          "key_frames": 2,
+          "ready": true,
+          "width": 448
+        }
+      ],
+      "vhost": "__defaultVhost__"
+    },
+    {
+      "aliveSecond": 7,
+      "app": "live",
+      "bytesSpeed": 20680,
+      "createStamp": 1731424913,
+      "isRecordingHLS": true,
+      "isRecordingMP4": false,
+      "originSock": {
+        "identifier": "178-77",
+        "local_ip": "127.0.0.1",
+        "local_port": 554,
+        "peer_ip": "127.0.0.1",
+        "peer_port": 55417
+      },
+      "originType": 2,
+      "originTypeStr": "rtsp_push",
+      "originUrl": "rtsp://127.0.0.1:554/live/test",
+      "params": "",
+      "readerCount": 0,
+      "schema": "rtmp",
+      "stream": "test",
+      "totalReaderCount": 0,
+      "tracks": [
+        {
+          "channels": 1,
+          "codec_id": 2,
+          "codec_id_name": "mpeg4-generic",
+          "codec_type": 1,
+          "duration": 3570,
+          "frames": 187,
+          "ready": true,
+          "sample_bit": 16,
+          "sample_rate": 44100
+        },
+        {
+          "codec_id": 0,
+          "codec_id_name": "H264",
+          "codec_type": 0,
+          "duration": 5597,
+          "fps": 26.0,
+          "frames": 149,
+          "gop_interval_ms": 801,
+          "gop_size": 21,
+          "height": 960,
+          "key_frames": 2,
+          "ready": true,
+          "width": 448
+        }
+      ],
+      "vhost": "__defaultVhost__"
+    },
+    {
+      "aliveSecond": 7,
+      "app": "live",
+      "bytesSpeed": 31156,
+      "createStamp": 1731424913,
+      "isRecordingHLS": true,
+      "isRecordingMP4": false,
+      "originSock": {
+        "identifier": "178-77",
+        "local_ip": "127.0.0.1",
+        "local_port": 554,
+        "peer_ip": "127.0.0.1",
+        "peer_port": 55417
+      },
+      "originType": 2,
+      "originTypeStr": "rtsp_push",
+      "originUrl": "rtsp://127.0.0.1:554/live/test",
+      "params": "",
+      "readerCount": 0,
+      "schema": "fmp4",
+      "stream": "test",
+      "totalReaderCount": 0,
+      "tracks": [
+        {
+          "channels": 1,
+          "codec_id": 2,
+          "codec_id_name": "mpeg4-generic",
+          "codec_type": 1,
+          "duration": 3570,
+          "frames": 187,
+          "ready": true,
+          "sample_bit": 16,
+          "sample_rate": 44100
+        },
+        {
+          "codec_id": 0,
+          "codec_id_name": "H264",
+          "codec_type": 0,
+          "duration": 5597,
+          "fps": 26.0,
+          "frames": 149,
+          "gop_interval_ms": 801,
+          "gop_size": 21,
+          "height": 960,
+          "key_frames": 2,
+          "ready": true,
+          "width": 448
+        }
+      ],
+      "vhost": "__defaultVhost__"
+    },
+    {
+      "aliveSecond": 7,
+      "app": "live",
+      "bytesSpeed": 20984,
+      "createStamp": 1731424913,
+      "isRecordingHLS": true,
+      "isRecordingMP4": false,
+      "originSock": {
+        "identifier": "178-77",
+        "local_ip": "127.0.0.1",
+        "local_port": 554,
+        "peer_ip": "127.0.0.1",
+        "peer_port": 55417
+      },
+      "originType": 2,
+      "originTypeStr": "rtsp_push",
+      "originUrl": "rtsp://127.0.0.1:554/live/test",
+      "params": "",
+      "readerCount": 0,
+      "schema": "rtsp",
+      "stream": "test",
+      "totalReaderCount": 0,
+      "tracks": [
+        {
+          "channels": 1,
+          "codec_id": 2,
+          "codec_id_name": "mpeg4-generic",
+          "codec_type": 1,
+          "duration": 3570,
+          "frames": 187,
+          "ready": true,
+          "sample_bit": 16,
+          "sample_rate": 44100
+        },
+        {
+          "codec_id": 0,
+          "codec_id_name": "H264",
+          "codec_type": 0,
+          "duration": 5597,
+          "fps": 26.0,
+          "frames": 149,
+          "gop_interval_ms": 801,
+          "gop_size": 21,
+          "height": 960,
+          "key_frames": 2,
+          "ready": true,
+          "width": 448
+        }
+      ],
+      "vhost": "__defaultVhost__"
+    }
+  ]
+}
