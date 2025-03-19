@@ -133,7 +133,7 @@ var (
 	StreamStatus           = newMetricDescr(Namespace, SubsystemStream, "status", "Stream status (1: active with data flowing, 0: inactive)", []string{"vhost", "app", "stream", "schema"})
 	StreamReaderCount      = newMetricDescr(Namespace, SubsystemStream, "reader_count", "Stream reader count", []string{"vhost", "app", "stream", "schema"})
 	StreamTotalReaderCount = newMetricDescr(Namespace, SubsystemStream, "total_reader_count", "Total reader count across all schemas", []string{"vhost", "app", "stream"})
-	StreamBandwidths       = newMetricDescr(Namespace, SubsystemStream, "bandwidths", "Stream bandwidth", []string{"vhost", "app", "stream", "schema", "originType"})
+	StreamBitrate          = newMetricDescr(Namespace, SubsystemStream, "bitrate", "Stream bitrate", []string{"vhost", "app", "stream", "schema"})
 	StreamTotal            = newMetricDescr(Namespace, SubsystemStream, "total", "Total number of streams", []string{})
 
 	// rtp metrics
@@ -613,12 +613,11 @@ func (e *Exporter) extractStream(ctx context.Context, ch chan<- prometheus.Metri
 				float64(stream.ReaderCount),
 				stream.Vhost, stream.App, stream.Stream, stream.Schema)
 
-			// stream bandwidths
-			// fixme: 这个有问题，不是总带宽，是码率
-			ch <- prometheus.MustNewConstMetric(StreamBandwidths,
+			// stream bitrate
+			ch <- prometheus.MustNewConstMetric(StreamBitrate,
 				prometheus.GaugeValue,
 				stream.BytesSpeed,
-				stream.Vhost, stream.App, stream.Stream, stream.Schema, stream.OriginTypeStr)
+				stream.Vhost, stream.App, stream.Stream, stream.Schema)
 			// todo: 增加一个zlm_stream_bytes 字段，表示流的总流量
 		}
 
