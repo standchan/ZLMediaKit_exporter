@@ -11,7 +11,9 @@ Prometheus exporter for [ZLMediaKit](https://github.com/ZLMediaKit/ZLMediaKit) m
 ## NOTE
 ⚠️ Warning: Not production-ready. Please thoroughly test before deploying to production environments.
 
+## Workflow
 
+![workflow](./www/workflow.png)
 ## Usage
 
 ### Docker
