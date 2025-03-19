@@ -69,7 +69,7 @@ make build
 | `zlm_stream_status`                       | vhost、app、stream、schema         | Stream status (1: active with data flowing, 0: inactive) |
 | `zlm_stream_reader_count`                | vhost、app、stream、schema         | Stream reader count              |
 | `zlm_stream_total_reader_count`          | vhost、app、stream         | Total reader count across all schemas |
-| `zlm_stream_bandwidths`                  | vhost、app、stream、schema、originType         | Stream bandwidth                  |
+| `zlm_stream_bitrate`                     | vhost、app、stream、schema         | Stream bitrate                  |
 | `zlm_stream_total`                       | {}                                | Total number of streams         |
 | `zlm_rtp_server_info`                    | port、stream_id         | RTP server info                  |
 | `zlm_rtp_server_total`                   | {}                                | Total number of RTP servers         |
