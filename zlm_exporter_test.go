@@ -365,7 +365,7 @@ func TestMetricsRegistration(t *testing.T) {
 	if StatisticsUdpSession == nil {
 		t.Error("StatisticsUdpSession metric not initialized")
 	}
-	if StreamBandwidths == nil {
+	if StreamBitrate == nil {
 		t.Error("StreamBandwidths metric not initialized")
 	}
 	if StreamsInfo == nil {
