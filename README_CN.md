@@ -2,27 +2,27 @@
 
 ![zlm_exporter](https://socialify.git.ci/standchan/zlm_exporter/image?language=1&owner=1&name=1&stargazers=1&theme=Light)
 
-English | [简体中文](./README_CN.md)
+[English](./README.md) | 简体中文
 
-Prometheus exporter for [ZLMediaKit](https://github.com/ZLMediaKit/ZLMediaKit) metrics, written in Go.
+[ZLMediaKit](https://github.com/ZLMediaKit/ZLMediaKit) 指标的 Prometheus exporter，使用 Go 语言编写。
 
 [![](https://img.shields.io/badge/license-MIT-green.svg)](https://github.com/standchan/zlm_exporter/blob/master/LICENSE)
 [![](https://img.shields.io/badge/language-golang-red.svg)](https://en.cppreference.com/)
 [![](https://img.shields.io/badge/PRs-welcome-yellow.svg)](https://github.com/standchan/zlm_exporter/pulls)
 
-## NOTE
-⚠️ Warning: Not production-ready. Please thoroughly test before deploying to production environments.
+## 注意
+⚠️ 警告：尚未准备好用于生产环境。在部署到生产环境之前请进行充分测试。
 
-## Workflow
+## 工作流程
 
 ![workflow](./www/workflow.png)
-## Usage
+## 使用方法
 
 ### Docker
 
 TODO
 
-### Source
+### 源代码
 ```shell
 git clone https://github.com/standchan/zlm_exporter
 cd zlm_exporter
@@ -30,28 +30,28 @@ make build
 ./zlm_exporter --zlm.api-url=<zlmediakit_api_uri> --zlm.secret=<zlmediakit_api_secret>
 ```
 
-## Command line flags
+## 命令行参数
 
-|  Name                      | Environment Variable Name                               | Description  |
+|  名称                      | 环境变量名称                               | 描述  |
 |-------------------------   |-------------------------------------------|----------|
-| `zlm.api-url`  |  ZLM_API_URL      |  URI on which to scrape zlmediakit metrics(ZlMediaKit apiServer url) default: http://localhost  |
-| `zlm.secret`      | ZLM_API_SECRET            | Secret for the scrape URI            |
-| `web.listen-address`| ZLM_EXPORTER_TELEMETRY_ADDRESS | Address to expose metrics. default: :9101 |
-| `web.telemetry-path`| ZLM_EXPORTER_TELEMETRY_PATH| Path under which to expose metrics. default: /metrics |
-| `web.ssl-verify` | ZLM_EXPORTER_SSL_VERIFY | Skip TLS verification. default: true |
+| `zlm.api-url`  |  ZLM_API_URL      |  用于抓取 zlmediakit 指标的 URI (ZLMediaKit apiServer url)，默认值：http://localhost  |
+| `zlm.secret`      | ZLM_API_SECRET            | 抓取 URI 的密钥            |
+| `web.listen-address`| ZLM_EXPORTER_TELEMETRY_ADDRESS | 暴露指标的地址，默认值：:9101 |
+| `web.telemetry-path`| ZLM_EXPORTER_TELEMETRY_PATH| 暴露指标的路径，默认值：/metrics |
+| `web.ssl-verify` | ZLM_EXPORTER_SSL_VERIFY | 跳过 TLS 验证，默认值：true |
 
-## Metrics
+## 指标
 
-| Metric Name                               | Labels                          | Description                      |
+| 指标名称                                | 标签                          | 描述                      |
 |-------------------------------------------|---------------------------------|----------------------------------|
-| `zlm_version_info`                        | branchName、buildTime、commitHash | Version info of ZLMediakit       |
-| `zlm_api_status`                          | endpoint                        | The status of API endpoint       |
-| `zlm_network_threads_total`               | {}                                | Total number of network threads  |
-| `zlm_network_threads_load_total`          | {}                                | Total of network threads load    |
-| `zlm_network_threads_delay_total`         | {}                                | Total of network threads delay   |
-| `zlm_work_threads_total`                  | {}                                | Total number of work threads     |
-| `zlm_work_threads_load_total`             | {}                                | Total of work threads load       |
-| `zlm_work_threads_delay_total`            | {}                                | Total of work threads delay      |
+| `zlm_version_info`                        | branchName、buildTime、commitHash | ZLMediaKit 的版本信息       |
+| `zlm_api_status`                          | endpoint                        | API 端点的状态       |
+| `zlm_network_threads_total`               | {}                                | 网络线程总数  |
+| `zlm_network_threads_load_total`          | {}                                | 网络线程负载总和    |
+| `zlm_network_threads_delay_total`         | {}                                | 网络线程延迟总和   |
+| `zlm_work_threads_total`                  | {}                                | 工作线程总数     |
+| `zlm_work_threads_load_total`             | {}                                | 工作线程负载总和       |
+| `zlm_work_threads_delay_total`            | {}                                | 工作线程延迟总和      |
 | `zlm_statistics_buffer`                   | {}                                | Statistics buffer                |
 | `zlm_statistics_buffer_like_string`       | {}                                | Statistics BufferLikeString      |
 | `zlm_statistics_buffer_list`              | {}                                | Statistics BufferList            |
@@ -67,19 +67,19 @@ make build
 | `zlm_statistics_tcp_session`              | {}                                | Statistics TcpSession            |
 | `zlm_statistics_udp_server`               | {}                                | Statistics UdpServer             |
 | `zlm_statistics_udp_session`              | {}                                | Statistics UdpSession            |
-| `zlm_session_info`                        | id、identifier、local_ip、local_port、peer_ip、peer_port、typeid | Session info                     |
-| `zlm_session_total`                       | {}                                | Total number of sessions         |
-| `zlm_stream_info`                         | vhost、app、stream、schema、origin_type、origin_url | Stream basic information         |
-| `zlm_stream_status`                       | vhost、app、stream、schema         | Stream status (1: active with data flowing, 0: inactive) |
-| `zlm_stream_reader_count`                | vhost、app、stream、schema         | Stream reader count              |
-| `zlm_stream_total_reader_count`          | vhost、app、stream         | Total reader count across all schemas |
-| `zlm_stream_bitrate`                     | vhost、app、stream、schema         | Stream bitrate                  |
-| `zlm_stream_total`                       | {}                                | Total number of streams         |
-| `zlm_rtp_server_info`                    | port、stream_id         | RTP server info                  |
-| `zlm_rtp_server_total`                   | {}                                | Total number of RTP servers         |
+| `zlm_session_info`                        | id、identifier、local_ip、local_port、peer_ip、peer_port、typeid | 会话信息                     |
+| `zlm_session_total`                       | {}                                | 会话总数         |
+| `zlm_stream_info`                         | vhost、app、stream、schema、origin_type、origin_url | 流基本信息         |
+| `zlm_stream_status`                       | vhost、app、stream、schema         | 流状态 (1: 活跃且有数据流动, 0: 不活跃) |
+| `zlm_stream_reader_count`                | vhost、app、stream、schema         | 流读取器计数              |
+| `zlm_stream_total_reader_count`          | vhost、app、stream         | 所有 schema 中的总读取器计数 |
+| `zlm_stream_bitrate`                     | vhost、app、stream、schema         | 流比特率                  |
+| `zlm_stream_total`                       | {}                                | 流总数         |
+| `zlm_rtp_server_info`                    | port、stream_id         | RTP 服务器信息                  |
+| `zlm_rtp_server_total`                   | {}                                | RTP 服务器总数         |
 
 <details>
-<summary>Metrics details Example</summary>
+<summary>指标详情示例</summary>
 # HELP zlm_api_status The status of API endpoint
 # TYPE zlm_api_status gauge
 zlm_api_status{endpoint="/index/"} 1
@@ -261,22 +261,20 @@ zlm_work_threads_load_total 0
 zlm_work_threads_total 8
 </details>
 
-## TODO
+## 待办事项
 
 - [ ] GA
-- [ ] Add disable exporting key-value metrics
-- [ ] Add grafana dashboard / prometheus alert example
-- [ ] Add git action CI/CD,and trigger docker build and push to docker hub
-- [ ] Add more tests
+- [ ] 添加禁用导出键值指标的功能
+- [ ] 添加 Grafana 仪表板 / Prometheus 告警示例
+- [ ] 添加 Git Action CI/CD，并触发 Docker 构建和推送到 Docker Hub
+- [ ] 添加更多测试
 
-## Contributing and reporting issues
+## 贡献和报告问题
 
-JUST DO IT! 
-
-We appreciate your feedback and contributions!
+欢迎～
 
 
-## Thanks
+## 致谢
 [ZLMediaKit](https://github.com/ZLMediaKit/ZLMediaKit)
 
 [JetBrains](https://www.jetbrains.com/)
@@ -289,6 +287,6 @@ We appreciate your feedback and contributions!
 
 [Cursor](https://www.cursor.com/)
 
-JetBrains/Cursor provides great IDE for coding.
+JetBrains/Cursor 为编码提供了出色的 IDE。
 
-Most unittest powered by Cursor.
+大多数单元测试由 Cursor 提供支持。
