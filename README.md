@@ -131,7 +131,7 @@ zlm_api_status{endpoint="/index/api/updateRtpServerSSRC"} 1
 zlm_api_status{endpoint="/index/api/version"} 1
 # HELP zlm_exporter_scrapes_total Current total ZLMediaKit scrapes.
 # TYPE zlm_exporter_scrapes_total counter
-zlm_exporter_scrapes_total 1
+zlm_exporter_scrapes_total 2
 # HELP zlm_network_threads_delay_total Total of network threads delay
 # TYPE zlm_network_threads_delay_total gauge
 zlm_network_threads_delay_total 0
@@ -146,48 +146,48 @@ zlm_network_threads_total 8
 zlm_rtp_server_total 0
 # HELP zlm_session_info Session info
 # TYPE zlm_session_info gauge
-zlm_session_info{id="11320-77",identifier="11320-77",local_ip="127.0.0.1",local_port="554",peer_ip="127.0.0.1",peer_port="63622",typeid="mediakit::RtspSession"} 1
-zlm_session_info{id="11321-79",identifier="11321-79",local_ip="127.0.0.1",local_port="80",peer_ip="127.0.0.1",peer_port="63633",typeid="mediakit::HttpSession"} 1
-zlm_session_info{id="11322-80",identifier="11322-80",local_ip="127.0.0.1",local_port="80",peer_ip="127.0.0.1",peer_port="63634",typeid="mediakit::HttpSession"} 1
-zlm_session_info{id="11323-83",identifier="11323-83",local_ip="127.0.0.1",local_port="80",peer_ip="127.0.0.1",peer_port="63637",typeid="mediakit::HttpSession"} 1
-zlm_session_info{id="11324-84",identifier="11324-84",local_ip="127.0.0.1",local_port="80",peer_ip="127.0.0.1",peer_port="63638",typeid="mediakit::HttpSession"} 1
-zlm_session_info{id="11325-81",identifier="11325-81",local_ip="127.0.0.1",local_port="80",peer_ip="127.0.0.1",peer_port="63635",typeid="mediakit::HttpSession"} 1
-zlm_session_info{id="11326-78",identifier="11326-78",local_ip="127.0.0.1",local_port="80",peer_ip="127.0.0.1",peer_port="63632",typeid="mediakit::HttpSession"} 1
-zlm_session_info{id="11327-85",identifier="11327-85",local_ip="127.0.0.1",local_port="80",peer_ip="127.0.0.1",peer_port="63639",typeid="mediakit::HttpSession"} 1
-zlm_session_info{id="11328-82",identifier="11328-82",local_ip="127.0.0.1",local_port="80",peer_ip="127.0.0.1",peer_port="63636",typeid="mediakit::HttpSession"} 1
+zlm_session_info{id="14396-76",identifier="14396-76",local_ip="127.0.0.1",local_port="554",peer_ip="127.0.0.1",peer_port="64889",typeid="mediakit::RtspSession"} 1
+zlm_session_info{id="14399-78",identifier="14399-78",local_ip="127.0.0.1",local_port="80",peer_ip="127.0.0.1",peer_port="64996",typeid="mediakit::HttpSession"} 1
+zlm_session_info{id="14400-80",identifier="14400-80",local_ip="127.0.0.1",local_port="80",peer_ip="127.0.0.1",peer_port="64999",typeid="mediakit::HttpSession"} 1
+zlm_session_info{id="14406-79",identifier="14406-79",local_ip="127.0.0.1",local_port="80",peer_ip="127.0.0.1",peer_port="65010",typeid="mediakit::HttpSession"} 1
+zlm_session_info{id="14407-81",identifier="14407-81",local_ip="127.0.0.1",local_port="80",peer_ip="127.0.0.1",peer_port="65011",typeid="mediakit::HttpSession"} 1
+zlm_session_info{id="14408-82",identifier="14408-82",local_ip="127.0.0.1",local_port="80",peer_ip="127.0.0.1",peer_port="65012",typeid="mediakit::HttpSession"} 1
+zlm_session_info{id="14409-83",identifier="14409-83",local_ip="127.0.0.1",local_port="80",peer_ip="127.0.0.1",peer_port="65013",typeid="mediakit::HttpSession"} 1
+zlm_session_info{id="14410-84",identifier="14410-84",local_ip="127.0.0.1",local_port="80",peer_ip="127.0.0.1",peer_port="65014",typeid="mediakit::HttpSession"} 1
+zlm_session_info{id="14411-85",identifier="14411-85",local_ip="127.0.0.1",local_port="80",peer_ip="127.0.0.1",peer_port="65015",typeid="mediakit::HttpSession"} 1
 # HELP zlm_session_total Total number of sessions
 # TYPE zlm_session_total gauge
 zlm_session_total 9
 # HELP zlm_statistics_buffer Statistics buffer
 # TYPE zlm_statistics_buffer gauge
-zlm_statistics_buffer 119
+zlm_statistics_buffer 2286
 # HELP zlm_statistics_buffer_like_string Statistics BufferLikeString
 # TYPE zlm_statistics_buffer_like_string gauge
-zlm_statistics_buffer_like_string 35
+zlm_statistics_buffer_like_string 535
 # HELP zlm_statistics_buffer_list Statistics BufferList
 # TYPE zlm_statistics_buffer_list gauge
-zlm_statistics_buffer_list 1
+zlm_statistics_buffer_list 0
 # HELP zlm_statistics_buffer_raw Statistics BufferRaw
 # TYPE zlm_statistics_buffer_raw gauge
-zlm_statistics_buffer_raw 53
+zlm_statistics_buffer_raw 444
 # HELP zlm_statistics_frame Statistics Frame
 # TYPE zlm_statistics_frame gauge
-zlm_statistics_frame 29
+zlm_statistics_frame 528
 # HELP zlm_statistics_frame_imp Statistics FrameImp
 # TYPE zlm_statistics_frame_imp gauge
-zlm_statistics_frame_imp 25
+zlm_statistics_frame_imp 264
 # HELP zlm_statistics_media_source Statistics MediaSource
 # TYPE zlm_statistics_media_source gauge
-zlm_statistics_media_source 6
+zlm_statistics_media_source 7
 # HELP zlm_statistics_multi_media_source_muxer Statistics MultiMediaSourceMuxer
 # TYPE zlm_statistics_multi_media_source_muxer gauge
 zlm_statistics_multi_media_source_muxer 1
 # HELP zlm_statistics_rtmp_packet Statistics RtmpPacket
 # TYPE zlm_statistics_rtmp_packet gauge
-zlm_statistics_rtmp_packet 0
+zlm_statistics_rtmp_packet 261
 # HELP zlm_statistics_rtp_packet Statistics RtpPacket
 # TYPE zlm_statistics_rtp_packet gauge
-zlm_statistics_rtp_packet 45
+zlm_statistics_rtp_packet 175
 # HELP zlm_statistics_socket Statistics Socket
 # TYPE zlm_statistics_socket gauge
 zlm_statistics_socket 66
@@ -206,18 +206,37 @@ zlm_statistics_udp_server 16
 # HELP zlm_statistics_udp_session Statistics UdpSession
 # TYPE zlm_statistics_udp_session gauge
 zlm_statistics_udp_session 0
-# HELP zlm_stream_bandwidths Stream bandwidth
-# TYPE zlm_stream_bandwidths gauge
-zlm_stream_bandwidths{app="live",originType="rtsp_push",schema="rtsp",stream="test",vhost="__defaultVhost__"} 16555
+# HELP zlm_stream_bitrate Stream bitrate
+# TYPE zlm_stream_bitrate gauge
+zlm_stream_bitrate{app="live",schema="fmp4",stream="test",vhost="__defaultVhost__"} 44878
+zlm_stream_bitrate{app="live",schema="hls",stream="test",vhost="__defaultVhost__"} 40432
+zlm_stream_bitrate{app="live",schema="rtmp",stream="test",vhost="__defaultVhost__"} 28119
+zlm_stream_bitrate{app="live",schema="rtsp",stream="test",vhost="__defaultVhost__"} 28385
+zlm_stream_bitrate{app="live",schema="ts",stream="test",vhost="__defaultVhost__"} 40432
 # HELP zlm_stream_info Stream basic information
 # TYPE zlm_stream_info gauge
+zlm_stream_info{app="live",origin_type="rtsp_push",origin_url="rtsp://127.0.0.1:554/live/test",schema="fmp4",stream="test",vhost="__defaultVhost__"} 1
+zlm_stream_info{app="live",origin_type="rtsp_push",origin_url="rtsp://127.0.0.1:554/live/test",schema="hls",stream="test",vhost="__defaultVhost__"} 1
+zlm_stream_info{app="live",origin_type="rtsp_push",origin_url="rtsp://127.0.0.1:554/live/test",schema="rtmp",stream="test",vhost="__defaultVhost__"} 1
 zlm_stream_info{app="live",origin_type="rtsp_push",origin_url="rtsp://127.0.0.1:554/live/test",schema="rtsp",stream="test",vhost="__defaultVhost__"} 1
+zlm_stream_info{app="live",origin_type="rtsp_push",origin_url="rtsp://127.0.0.1:554/live/test",schema="ts",stream="test",vhost="__defaultVhost__"} 1
 # HELP zlm_stream_reader_count Stream reader count
 # TYPE zlm_stream_reader_count gauge
+zlm_stream_reader_count{app="live",schema="fmp4",stream="test",vhost="__defaultVhost__"} 0
+zlm_stream_reader_count{app="live",schema="hls",stream="test",vhost="__defaultVhost__"} 0
+zlm_stream_reader_count{app="live",schema="rtmp",stream="test",vhost="__defaultVhost__"} 0
 zlm_stream_reader_count{app="live",schema="rtsp",stream="test",vhost="__defaultVhost__"} 0
+zlm_stream_reader_count{app="live",schema="ts",stream="test",vhost="__defaultVhost__"} 0
 # HELP zlm_stream_status Stream status (1: active with data flowing, 0: inactive)
 # TYPE zlm_stream_status gauge
+zlm_stream_status{app="live",schema="fmp4",stream="test",vhost="__defaultVhost__"} 1
+zlm_stream_status{app="live",schema="hls",stream="test",vhost="__defaultVhost__"} 1
+zlm_stream_status{app="live",schema="rtmp",stream="test",vhost="__defaultVhost__"} 1
 zlm_stream_status{app="live",schema="rtsp",stream="test",vhost="__defaultVhost__"} 1
+zlm_stream_status{app="live",schema="ts",stream="test",vhost="__defaultVhost__"} 1
+# HELP zlm_stream_total Total number of streams
+# TYPE zlm_stream_total gauge
+zlm_stream_total 1
 # HELP zlm_stream_total_reader_count Total reader count across all schemas
 # TYPE zlm_stream_total_reader_count gauge
 zlm_stream_total_reader_count{app="test",stream="__defaultVhost__",vhost="live"} 0
@@ -229,10 +248,10 @@ zlm_up 1
 zlm_version_info{branchName="master",buildTime="2024-06-11T21:28:30",commitHash="c446f6b"} 1
 # HELP zlm_work_threads_delay_total Total of work threads delay
 # TYPE zlm_work_threads_delay_total gauge
-zlm_work_threads_delay_total 61
+zlm_work_threads_delay_total 104
 # HELP zlm_work_threads_load_total Total of work threads load
 # TYPE zlm_work_threads_load_total gauge
-zlm_work_threads_load_total 100
+zlm_work_threads_load_total 0
 # HELP zlm_work_threads_total Total number of work threads
 # TYPE zlm_work_threads_total gauge
 zlm_work_threads_total 8
