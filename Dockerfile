@@ -1,4 +1,5 @@
 # pre-build
+# ADD sources.list /etc/apt/sources.list,if network is blocked
 FROM golang:1.22-alpine AS builder
 
 WORKDIR /app
