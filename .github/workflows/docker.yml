@@ -2,7 +2,9 @@ name: Build and push image to DockerHub
 
 on:
   push:
-    branches: [ dev ]
+    branches:
+      - dev
+      - master
 
 env:
   # Use docker.io for Docker Hub if empty
@@ -39,7 +41,6 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/master' }}
-            type=sha,format=short
             type=ref,event=branch
             
       - name: Build and push
