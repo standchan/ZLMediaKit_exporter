@@ -1,4 +1,4 @@
-# zlm_exporter
+# ZLMediaKit Prometheus Exporter
 
 ![zlm_exporter](https://socialify.git.ci/standchan/zlm_exporter/image?language=1&owner=1&name=1&stargazers=1&theme=Light)
 
