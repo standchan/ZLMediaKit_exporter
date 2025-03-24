@@ -31,14 +31,22 @@ docker run --rm --name zlm_exporter -p 9101:9101 \
   -e ZLM_API_URL=<zlmediakit_api_uri> \
   -e ZLM_API_SECRET=<zlmediakit_api_secret> \
   standchan2024/zlm_exporter:latest
+
+## get metrics
+curl http://localhost:9101/metrics
 ```
 
 ### Source
 ```shell
+## clone repo
 git clone https://github.com/standchan/zlm_exporter
 cd zlm_exporter
+## build
 make build
+## run
 ./zlm_exporter --zlm.api-url=<zlmediakit_api_uri> --zlm.secret=<zlmediakit_api_secret>
+## get metrics
+curl http://localhost:9101/metrics
 ```
 
 ## Command line flags
