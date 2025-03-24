@@ -20,7 +20,18 @@ Prometheus exporter for [ZLMediaKit](https://github.com/ZLMediaKit/ZLMediaKit) m
 
 ### Docker
 
-TODO
+```shell
+## pull image
+docker pull standchan2024/zlm_exporter:latest
+# OR build image
+make build-image
+
+## run container
+docker run --rm --name zlm_exporter -p 9101:9101 \
+  -e ZLM_API_URL=<zlmediakit_api_uri> \
+  -e ZLM_API_SECRET=<zlmediakit_api_secret> \
+  standchan2024/zlm_exporter:latest
+```
 
 ### Source
 ```shell

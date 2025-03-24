@@ -11,7 +11,7 @@ IMAGE_TAG = latest
 # Format
 #
 
-.PHONY: fmt lint lintfix test test-cover test-file build build-image run
+.PHONY: fmt lint lintfix test test-cover test-file build build-docker run
 
 # check code style in these directories
 FMT_DIRS = .
@@ -43,7 +43,7 @@ test_file:
 build:
 	$(GO) build -ldflags="-s -w" -o zlm_exporter .
 
-build-image:
+build-docker:
 	docker build -t $(ZLMEXPORTER_IMAGE):$(IMAGE_TAG) .
 
 run:

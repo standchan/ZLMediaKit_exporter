@@ -22,7 +22,18 @@
 
 ### Docker
 
-TODO
+```shell
+## 拉取镜像或者构建镜像
+docker pull standchan2024/zlm_exporter:latest
+# OR
+make build-image
+
+## 运行容器
+docker run --rm --name zlm_exporter -p 9101:9101 \
+  -e ZLM_API_URL=<zlmediakit_api_uri> \
+  -e ZLM_API_SECRET=<zlmediakit_api_secret> \
+  standchan2024/zlm_exporter:latest
+```
 
 ### 源代码
 ```shell
