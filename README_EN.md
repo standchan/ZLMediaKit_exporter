@@ -39,8 +39,8 @@ curl http://localhost:9101/metrics
 ### Source
 ```shell
 ## clone repo
-git clone https://github.com/standchan/zlm_exporter
-cd zlm_exporter
+git clone https://github.com/standchan/ZLMediaKit_exporter
+cd ZLMediaKit_exporter
 ## build
 make build
 ## run
