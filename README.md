@@ -1,6 +1,6 @@
 # ZLMediaKit Prometheus Exporter
 
-![zlm_exporter](https://socialify.git.ci/standchan/zlm_exporter/image?language=1&owner=1&name=1&stargazers=1&theme=Light)
+![zlm_exporter](https://socialify.git.ci/standchan/ZLMediaKit_exporter/image?language=1&owner=1&name=1&stargazers=1&theme=Light)
 
 简体中文 | [English](./README_EN.md)
 
