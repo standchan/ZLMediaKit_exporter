@@ -18,10 +18,11 @@
 
 具体可以访问：
 guest/guest
+
 http://1.15.33.150:3000/d/adwaoe6v5tkw0a/zlmediakit
 
 
-## 工作流程
+## Workflow
 
 ![workflow](./www/workflow.png)
 ## 使用方法
@@ -61,11 +62,11 @@ curl http://localhost:9101/metrics
 
 |  名称                      | 环境变量名称                               | 描述  |
 |-------------------------   |-------------------------------------------|----------|
-| `zlm.api-url`  |  ZLM_API_URL      |  用于抓取 zlmediakit 指标的 URI (ZLMediaKit apiServer url)，默认值：http://localhost  |
-| `zlm.secret`      | ZLM_API_SECRET            | 抓取 URI 的密钥            |
-| `web.listen-address`| ZLM_EXPORTER_TELEMETRY_ADDRESS | 暴露指标的地址，默认值：:9101 |
-| `web.telemetry-path`| ZLM_EXPORTER_TELEMETRY_PATH| 暴露指标的路径，默认值：/metrics |
-| `web.ssl-verify` | ZLM_EXPORTER_SSL_VERIFY | 跳过 TLS 验证，默认值：true |
+| `zlm.api-url`  |  ZLM_API_URL      |  ZLMediaKit apiServer url, default: http://localhost  |
+| `zlm.secret`      | ZLM_API_SECRET            | zlmediakit api secret|
+| `web.listen-address`| ZLM_EXPORTER_TELEMETRY_ADDRESS | expose metrics address, default: :9101 |
+| `web.telemetry-path`| ZLM_EXPORTER_TELEMETRY_PATH| expose metrics path, default: /metrics |
+| `web.ssl-verify` | ZLM_EXPORTER_SSL_VERIFY | skip TLS verify, default: true |
 
 ## 收集的指标
 
@@ -291,9 +292,9 @@ zlm_work_threads_total 8
 ## Roadmap
 
 - [x] 添加 Git Action CI/CD，并触发 Docker 构建和推送到 Docker Hub
-- [ ] GA
+- [x] GA
+- [x] 添加 Grafana 仪表板 / Prometheus 告警使用示例
 - [ ] 禁止采集指定指标 feature/disable-metrics
-- [ ] 添加 Grafana 仪表板 / Prometheus 告警使用示例
 - [ ] 添加更多测试
 
 ## 贡献和报告问题

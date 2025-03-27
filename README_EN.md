@@ -16,6 +16,7 @@ Prometheus exporter for [ZLMediaKit](https://github.com/ZLMediaKit/ZLMediaKit) m
 
 Demo URL:
 guest/guest
+
 http://1.15.33.150:3000/d/adwaoe6v5tkw0a/zlmediakit
 
 
@@ -288,10 +289,10 @@ zlm_work_threads_total 8
 
 ## Roadmap
 
-- [ ] Add git action CI/CD,and trigger docker build and push to docker hub
-- [ ] GA
+- [x] Add git action CI/CD,and trigger docker build and push to docker hub
+- [x] GA
+- [x] Add grafana dashboard / prometheus alert example
 - [ ] Add disable exporting key-value metrics
-- [ ] Add grafana dashboard / prometheus alert example
 - [ ] Add more tests
 
 ## Contributing and reporting issues
