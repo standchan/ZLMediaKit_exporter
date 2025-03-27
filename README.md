@@ -13,8 +13,13 @@
 [![](https://img.shields.io/badge/language-golang-red.svg)](https://en.cppreference.com/)
 [![](https://img.shields.io/badge/PRs-welcome-yellow.svg)](https://github.com/standchan/zlm_exporter/pulls)
 
-## 注意
-⚠️ 注意：在部署到生产环境之前请进行充分测试。
+## Grafana DEMO
+![Grafana DEMO](./www/grafana_demo.png)
+
+具体可以访问：
+guest/guest
+http://1.15.33.150:3000/d/adwaoe6v5tkw0a/zlmediakit
+
 
 ## 工作流程
 
